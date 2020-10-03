@@ -18,6 +18,7 @@ const gulp = require('gulp');
 const gulpif = require('gulp-if');
 const ifdef = require('gulp-ifdef');
 const ignore = require('gulp-ignore');
+const imgproc = require('./gulp/imgproc.js');
 const json5 = require('./gulp/json5.js');
 const JSON5 = require('json5');
 const lazypipe = require('lazypipe');
@@ -102,6 +103,7 @@ const config = {
     'src/client/**/*.wav',
     'src/client/**/*.ogg',
     'src/client/**/*.png',
+    '!src/client/img/proc/*.png',
     'src/client/**/*.jpg',
     'src/client/**/*.glb',
     'src/client/**/*.ico',
@@ -110,6 +112,8 @@ const config = {
     // 'src/client/**/vendor/**',
     // 'src/client/manifest.json',
   ],
+  client_img_proc: ['src/client/img/proc/*.png'],
+  client_img_proc_opt: ['src/client/img/proc/*.png.opt'],
   client_vendor: ['src/client/**/vendor/**'],
   compress_files: [
     'client/**/*.js',
@@ -273,6 +277,13 @@ gulp.task('client_static', function () {
     .pipe(newer('./dist/game/build.dev/client'))
     .pipe(gulp.dest('./dist/game/build.dev/client'));
 });
+
+gulp.task('client_img_proc', function (next) { // FRVR
+  return gulp.src(config.client_img_proc)
+    .pipe(imgproc())
+    .pipe(gulp.dest('./dist/game/build.dev/client/img'));
+});
+
 
 gulp.task('client_fsdata', function () {
   return gulp.src(config.client_fsdata, { base: 'src/client', allowEmpty: true })
@@ -608,6 +619,7 @@ const build_misc_nolint = [
   'client_html',
   'client_css',
   'client_static',
+  'client_img_proc',
   'client_fsdata_wrap',
 ];
 
@@ -644,6 +656,8 @@ function watchStart(done) {
   gulp.watch(config.client_vendor, maybeProdSeries('build.prod.client', 'client_html', 'bs-reload'));
   gulp.watch(config.client_css, maybeProdSeries('build.prod.client', 'client_css'));
   gulp.watch(config.client_static, maybeProdSeries('build.prod.client', 'client_static'));
+  gulp.watch(config.client_img_proc, maybeProdSeries('build.prod.client', 'client_img_proc'));
+  gulp.watch(config.client_img_proc_opt, maybeProdSeries('build.prod.client', 'client_img_proc'));
   gulp.watch(config.client_fsdata, maybeProdSeries('build.prod.client', 'client_fsdata'));
   gulp.watch(config.client_json_files, maybeProdSeries('build.prod.client', 'client_json'));
   gulp.watch(config.server_json_files, maybeProdSeries('build.prod.server', 'server_json'));
