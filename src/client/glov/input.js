@@ -648,7 +648,9 @@ export function startup(_canvas, params) {
   // For iOS, this is needed in test_fullscreen, but not here, for some reason
   //window.addEventListener('gesturestart', ignored, false);
 
-  window.addEventListener('beforeunload', beforeUnload, false);
+  if (0) { // donotcheckin
+    window.addEventListener('beforeunload', beforeUnload, false);
+  }
 }
 
 
