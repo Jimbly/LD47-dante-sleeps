@@ -7,13 +7,15 @@ Style:
 X Goal is to collect all rings
 X Score is fewest number of hits?
 X When all rings collected, stop flying in a loop and fly off into the sunset (zoom in or out?)
-backgrounds
+X backgrounds
 title screen / high scores
 particles:
+  air pockets
   on hit
   on ring pickup
   behind plane - varying base on thrust
 subtle indicator of current arc and thrust amount?
+visible score is rings picked up minus hits? drop a ring upon hit
 
 Biplane Loop
 Art:

@@ -10,8 +10,7 @@ const { Bitmap } = require('imagejs');
 const through = require('through2');
 const Vinyl = require('vinyl');
 
-let w = 16;
-let h = 16;
+let target_size = 16;
 let colorType = 6;
 
 module.exports = function () {
@@ -32,10 +31,12 @@ module.exports = function () {
         }
         let ret;
         let { tile } = opts;
+        let targetw = opts.target_size || target_size;
+        let targeth = opts.target_size || target_size;
         if (tile) {
           let num_tx = floor(pngin.width / tile);
           let num_ty = floor(pngin.height / tile);
-          ret = new PNG({ width: num_tx * w, height: num_ty * h, colorType });
+          ret = new PNG({ width: num_tx * targetw, height: num_ty * targeth, colorType });
           // resize tile by tile
           for (let ty=0; ty < num_ty; ++ty) {
             for (let tx=0; tx < num_tx; ++tx) {
@@ -47,12 +48,12 @@ module.exports = function () {
                   }
                 }
               }
-              let dest = { width: w, height: h, data: Buffer.alloc(w * h * 4) };
+              let dest = { width: targetw, height: targeth, data: Buffer.alloc(targetw * targeth * 4) };
               resize.bicubicInterpolation({ data: imgdata, width: tile, height: tile }, dest);
-              for (let jj = 0; jj < h; ++jj) {
-                for (let ii = 0; ii < w; ++ii) {
+              for (let jj = 0; jj < targeth; ++jj) {
+                for (let ii = 0; ii < targetw; ++ii) {
                   for (let kk = 0; kk < 4; ++kk) {
-                    ret.data[((ty * h + jj) * ret.width + tx * w + ii) * 4 + kk] = dest.data[(jj * w + ii) * 4 + kk];
+                    ret.data[((ty * targeth + jj) * ret.width + tx * targetw + ii) * 4 + kk] = dest.data[(jj * targetw + ii) * 4 + kk];
                   }
                 }
               }
@@ -60,15 +61,15 @@ module.exports = function () {
           }
         } else {
           // resize all at once
-          let bitmap = new Bitmap();
-          bitmap._data = {
+          let dest = { width: targetw, height: targeth, data: Buffer.alloc(targetw * targeth * 4) };
+          resize.bicubicInterpolation({
             data: pngin.data,
             width: pngin.width,
             height: pngin.height,
-          };
-          bitmap = bitmap.resize({ width: w, height: h, algorithm: 'bicubicInterpolation' });
-          ret = new PNG({ width: w, height: h, colorType });
-          ret.data = bitmap._data.data;
+          }, dest);
+          //bitmap = bitmap.resize({ width: targetw, height: targeth, algorithm: 'bicubicInterpolation' });
+          ret = new PNG({ width: targetw, height: targeth, colorType });
+          ret.data = dest.data;
         }
         let buffer = PNG.sync.write(ret);
         this.push(new Vinyl({

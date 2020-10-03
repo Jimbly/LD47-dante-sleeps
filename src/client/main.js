@@ -102,6 +102,8 @@ export function main() {
     sprites.rock = createSprite({
       name: 'rock',
       size: vec2(16, 16),
+      ws: [12, 12],
+      hs: [12, 12],
       origin: vec2(0.5,0.5),
     });
     sprites.player = createSprite({
@@ -125,6 +127,23 @@ export function main() {
       url: 'white',
       size: vec2(render_width, render_height),
     });
+    sprites.bg = {};
+    sprites.bg.hill_big = [
+      createSprite({ name: 'bg/hill_big_1' }),
+      createSprite({ name: 'bg/hill_big_2' }),
+      createSprite({ name: 'bg/hill_big_3' }),
+    ];
+    sprites.bg.plant = [
+      createSprite({ name: 'bg/plant_1' }),
+      createSprite({ name: 'bg/plant_2' }),
+      createSprite({ name: 'bg/plant_3' }),
+      createSprite({ name: 'bg/plant_4' }),
+    ];
+    sprites.bg.hill = [
+      createSprite({ name: 'bg/hill_1' }),
+      createSprite({ name: 'bg/hill_2' }),
+      createSprite({ name: 'bg/hill_3' }),
+    ];
   }
   initGraphics();
 
@@ -135,7 +154,7 @@ export function main() {
     rand = randCreate(seed);
     let rdense = 16;
     let safe_zone = 320;
-    let num_rings = 2;
+    let num_rings = 10;
     let ring_dense = 160;
     let air_dense = 230;
     let level_w = ring_dense * (num_rings + 1);
@@ -145,12 +164,16 @@ export function main() {
       hit_rings: 0,
       hit_rocks: 0,
       cam_x: -game_width / 2 + 160,
+      bg_x: 0,
       player: {
         pos: vec2(160, game_height / 2 + base_radius),
         angle: PI,
         radius: 1,
       },
       stuff: [],
+      do_win: false,
+      win_counter: 0,
+      bg_data: [],
     };
     let num_rocks = floor(state.level_w / rdense);
     for (let ii = 0; ii < num_rocks; ++ii) {
@@ -165,10 +188,11 @@ export function main() {
         pos: vec2(x, y),
         angle: rand.floatBetween(0, PI * 2),
         rspeed: rand.floatBetween(-1, 1),
-        color: vec4(0.1, 0.1, 0.1, 1),
+        color: vec4(1,1,1, 1),
         freq: 0, // 0.001 * rand.random(),
         amp: 40,
         rsquared: 8*8,
+        frame: rand.range(4),
         z: Z.ROCKS,
       });
     }
@@ -209,6 +233,49 @@ export function main() {
   }
   setupLevel(4);
 
+
+  let bg_layers = [{
+    xscale: 0.05,
+    dx: 120,
+    dx_range: 40,
+    w: 320,
+    h: 128,
+    ymin: game_height - 128 - 50,
+    ymax: game_height - 128*0.5 - 50,
+    sprite_list: sprites.bg.hill_big,
+    crange: [0.4, 0.6],
+  }, {
+    xscale: 0.1,
+    dx: 80,
+    dx_range: 40,
+    w: 320,
+    h: 128,
+    ymin: game_height - 128,
+    ymax: game_height - 128*0.5,
+    sprite_list: sprites.bg.hill_big,
+    crange: [0.6, 1.0],
+  }, {
+    xscale: 0.2,
+    dx: 100,
+    dx_range: 50,
+    w: 64,
+    h: 128,
+    ymin: game_height - 160,
+    ymax: game_height - 64,
+    sprite_list: sprites.bg.plant,
+    crange: [0.8, 1.0],
+  }, {
+    xscale: 0.3,
+    dx: 60,
+    dx_range: 10,
+    w: 128,
+    h: 128,
+    ymin: game_height - 64,
+    ymax: game_height - 16,
+    sprite_list: sprites.bg.hill,
+    crange: [0.7, 1],
+  }];
+
   let hud_style = glov_font.style(null, {
     outline_width: 3,
     outline_color: (pico8.font_colors[0] & 0xFFFFFF00) | 0x80,
@@ -236,7 +303,7 @@ export function main() {
   function play(dt) {
     sprites.game_bg.draw({
       x: 0, y: 0, z: Z.BACKGROUND,
-      color: pico8.colors[1],
+      color: pico8.colors[2],
     });
     camera2d.setAspectFixed(game_width, game_height);
 
@@ -249,6 +316,10 @@ export function main() {
       state.cam_x += state.level_w;
     }
 
+    if (engine.DEBUG && input.keyDownEdge(KEYS.F1)) {
+      state.do_win = !state.do_win;
+    }
+
     // update stuff
     let hit_air = false;
     for (let ii = 0; ii < stuff.length; ++ii) {
@@ -257,7 +328,8 @@ export function main() {
       r.pos[1] = r.pos0[1] + r.amp * sin(r.freq * engine.frame_timestamp);
       if (r.type === 'air') {
         r.hit = player.pos[0] > r.pos[0] - r.size[0]/2 && player.pos[0] < r.pos[0] + r.size[0]/2 &&
-          player.pos[1] > r.pos[1] - r.size[1]/2 && player.pos[1] < r.pos[1] + r.size[1]/2;
+          player.pos[1] > r.pos[1] - r.size[1]/2 && player.pos[1] < r.pos[1] + r.size[1]/2 &&
+          !state.do_win;
         if (r.hit) {
           hit_air = true;
         }
@@ -285,7 +357,7 @@ export function main() {
       let dist = -dt * speed_scale * 0.2;
       new_pos = vec2(player.pos[0] + cos(player.angle) * dist, player.pos[1] + sin(player.angle) * dist);
       if (player.angle === PI) {
-        let dh = dt * 0.1;
+        let dh = dt * 0.05;
         // if (new_pos[1] < game_height/2) {
         //   new_pos[1] = min(new_pos[1] + dh, game_height / 2);
         // } else if (new_pos[1] > game_height / 2) {
@@ -387,8 +459,10 @@ export function main() {
     }
     player.pos[0] = new_pos[0];
     player.pos[1] = new_pos[1];
-    state.cam_x = min(max(state.cam_x, floor(player.pos[0]) - game_width * 2 / 3),
+    let new_cam_x = min(max(state.cam_x, floor(player.pos[0]) - game_width * 2 / 3),
       floor(player.pos[0]) - game_width / 3);
+    state.bg_x += new_cam_x - state.cam_x;
+    state.cam_x = new_cam_x;
 
     let cam_x = floor(state.cam_x);
     camera2d.set(camera2d.x0() + cam_x, camera2d.y0(), camera2d.x1() + cam_x, camera2d.y1());
@@ -402,6 +476,7 @@ export function main() {
       w: player_scale,
       h: player_scale,
     });
+    let fade = state.do_win ? max(0, 1 - state.win_counter / 3000) : 1;
     let view_x0 = cam_x - 64;
     let view_x1 = cam_x + game_width + 64;
     for (let ii = 0; ii < stuff.length; ++ii) {
@@ -441,8 +516,11 @@ export function main() {
           }
           if (r.type === 'rock') {
             r.color[0] = 1;
+            r.color[1] = 0;
+            r.color[2] = 0;
           } else {
             r.color[0] = 0;
+            r.color[1] = 1;
             r.color[2] = 0;
           }
         }
@@ -456,6 +534,8 @@ export function main() {
         }
         if (r.type === 'ring') {
           frame = floor(r.frame + engine.frame_timestamp * 0.01) % 10;
+        } else if (r.type === 'rock') {
+          frame = r.frame;
         }
       }
       let x = r.pos[0];
@@ -465,6 +545,8 @@ export function main() {
         x += state.level_w;
       }
       if (x >= view_x0 && x <= view_x1) {
+        let alpha_save = r.color[3];
+        r.color[3] *= fade;
         r.sprite.draw({
           x,
           y: r.pos[1],
@@ -474,15 +556,61 @@ export function main() {
           color: r.color,
           frame,
         });
+        r.color[3] = alpha_save;
       }
     }
 
-    ui.print(null, 50 + (cam_x > game_width/2 ? state.level_w : 0), game_height - 32,
+    ui.print(glov_font.styleAlpha(null, fade), 50 + (cam_x > game_width/2 ? state.level_w : 0), game_height - 32,
       Z.PLAYER - 1, 'Controls: A and D');
 
-    // HUD
     camera2d.setAspectFixed(game_width, game_height);
+    // Background
+    let z = Z.BACKGROUND + 1;
+    let { bg_x, bg_data } = state;
+    let layer = 0;
+    function doBGLayer(opts) {
+      if (!bg_data[layer]) {
+        bg_data[layer] = [];
+      }
+      let layer_data = bg_data[layer];
+      let layer_x = floor(bg_x * opts.xscale);
+      let x0 = floor((layer_x - opts.w) / opts.dx);
+      let x1 = floor((layer_x + game_width) / opts.dx) + 1;
+      for (let x = x0; x <= x1; ++x) {
+        let hb = layer_data[x];
+        if (!hb) {
+          let yrange = rand.random();
+          let y = (opts.ymax - opts.ymin) * yrange + opts.ymin;
+          hb = layer_data[x] = {
+            idx: rand.range(opts.sprite_list.length),
+            xoffs: rand.floatBetween(0, opts.dx_range),
+            y,
+            z: z + yrange,
+          };
+          if (opts.crange) {
+            let v = (opts.crange[1] - opts.crange[0]) * yrange + opts.crange[0];
+            hb.color = vec4(v,v,v,1);
+          } else {
+            hb.color = vec4(1,1,1,1);
+          }
+        }
+        opts.sprite_list[hb.idx].draw({
+          x: floor(x * opts.dx + hb.xoffs - layer_x),
+          y: hb.y,
+          w: opts.w,
+          h: opts.h,
+          z: hb.z,
+          color: hb.color,
+        });
+      }
+      layer++;
+      z++;
+    }
+    for (let ii = 0; ii < bg_layers.length; ++ii) {
+      doBGLayer(bg_layers[ii]);
+    }
 
+    // HUD
     //ui.print(null, 5, 5, Z.UI, `cam_x:${cam_x}`);
 
     let score_size = 100;
