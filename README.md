@@ -4,9 +4,16 @@ LD47 -
 Style:
   space ship, alien planets backgrounds
   avoid: rocks and other debris, aliens? dog-aliens? sputnik?
-Make level a loop
-Goal is to collect all rings
-Score is fewest number of hits?
+X Goal is to collect all rings
+X Score is fewest number of hits?
+X When all rings collected, stop flying in a loop and fly off into the sunset (zoom in or out?)
+backgrounds
+title screen / high scores
+particles:
+  on hit
+  on ring pickup
+  behind plane - varying base on thrust
+subtle indicator of current arc and thrust amount?
 
 Biplane Loop
 Art:
