@@ -6,7 +6,7 @@ const camera2d = require('./glov/camera2d.js');
 const engine = require('./glov/engine.js');
 // const glov_font = require('./glov/font.js');
 const input = require('./glov/input.js');
-const { cos, max, min, sin, tan, PI } = Math;
+const { cos, floor, max, min, sin, tan, PI } = Math;
 const net = require('./glov/net.js');
 const pico8 = require('./glov/pico8.js');
 const { randCreate } = require('./glov/rand_alea.js');
@@ -14,19 +14,34 @@ const glov_sprites = require('./glov/sprites.js');
 // const sprite_animation = require('./glov/sprite_animation.js');
 // const transition = require('./glov/transition.js');
 const ui = require('./glov/ui.js');
+const { clamp } = require('../common/util.js');
 // const { soundLoad, soundPlay, soundPlayMusic, FADE_IN, FADE_OUT } = require('./glov/sound.js');
-const { vec2, vec4, v2copy, v2distSq } = require('./glov/vmath.js');
+const {
+  vec2,
+  v2add,
+  v2distSq,
+  v2scale,
+  v2sub,
+  vec4,
+} = require('./glov/vmath.js');
 
 window.Z = window.Z || {};
 Z.BACKGROUND = 1;
-Z.SPRITES = 10;
+Z.AIR = 10;
+Z.PLAYER = 20;
+Z.ROCKS = 30;
+Z.RINGS = 32;
 Z.PARTICLES = 20;
 Z.UI_TEST = 200;
 
 // let app = exports;
 // Virtual viewport for our game logic
-export const game_width = 320;
-export const game_height = 240;
+const game_width = 320;
+const game_height = 240;
+const render_width = game_width;
+const render_height = game_height;
+
+const rock_fade_time = 1000;
 
 export let sprites = {};
 
@@ -51,20 +66,21 @@ export function main() {
     }
 
     if (!engine.startup({
-      game_width,
-      game_height,
+      game_width: render_width,
+      game_height: render_height,
       pixely,
       font,
       viewport_postprocess: false,
     })) {
       return true;
     }
+    return false;
   }
   if (startup()) {
     return;
   }
 
-  let { font } = ui;
+  //let { font } = ui;
 
   // const font = engine.font;
 
@@ -73,10 +89,10 @@ export function main() {
   ui.setFontHeight(8);
 
   const createSprite = glov_sprites.create;
+  // const createAnimation = sprite_animation.create;
 
-  // Cache KEYS
   const KEYS = input.KEYS;
-  const PAD = input.PAD;
+  //const PAD = input.PAD;
 
   function initGraphics() {
     sprites.rock = createSprite({
@@ -89,44 +105,133 @@ export function main() {
       size: vec2(16, 16),
       origin: vec2(0.5,0.5),
     });
+    sprites.ring = createSprite({
+      name: 'ring',
+      ws: [32, 32, 32],
+      hs: [32, 32, 32, 32],
+      size: vec2(16, 16),
+      origin: vec2(0.5, 0.5),
+    });
+    sprites.air = createSprite({
+      url: 'white',
+      size: vec2(1, 1),
+      origin: vec2(0.5, 0.5),
+    });
     sprites.game_bg = createSprite({
       url: 'white',
-      size: vec2(game_width, game_height),
+      size: vec2(render_width, render_height),
     });
   }
+  initGraphics();
 
+  const base_radius = 50;
   let state = {
-    cam_x: 0,
+    level_w: 160 * 10,
+    cam_x: -game_width / 2 + 160,
     player: {
-      pos: vec2(150, 200),
+      pos: vec2(160, game_height / 2 + base_radius),
       angle: PI,
       radius: 1,
     },
-    rocks: [],
+    stuff: [],
   };
   let rand = randCreate(1);
+  let rdense = 16;
   for (let ii = 0; ii < 100; ++ii) {
-    state.rocks.push({
-      pos: vec2(ii * 16 + rand.random() * 16, rand.floatBetween(16, game_height - 16)),
+    let x = ii * rdense + rand.random() * rdense;
+    let y = rand.floatBetween(16, game_height - 16*2);
+    if (x < 320) {
+      y = y < game_height / 2 ? y * 0.1 : game_height - (game_height - y) * 0.1;
+    }
+    state.stuff.push({
+      sprite: sprites.rock,
+      type: 'rock',
+      pos: vec2(x, y),
       angle: rand.floatBetween(0, PI * 2),
       rspeed: rand.floatBetween(-1, 1),
       color: vec4(0.1, 0.1, 0.1, 1),
+      freq: 0, // 0.001 * rand.random(),
+      amp: 40,
+      rsquared: 8*8,
+      z: Z.ROCKS,
     });
+  }
+  for (let ii = 0; ii < 9; ++ii) {
+    state.stuff.push({
+      sprite: sprites.ring,
+      type: 'ring',
+      pos: vec2(160 + ii * 160 + rand.random() * 160, rand.floatBetween(32, game_height - 32*2)),
+      angle: 0,
+      rspeed: 0,
+      frame: rand.floatBetween(0, 10),
+      color: vec4(1,1,1, 1),
+      rsquared: 12*12,
+      freq: 0.001,
+      amp: 32,
+      z: Z.RINGS,
+    });
+  }
+  for (let ii = 0; ii < 0; ++ii) {
+    state.stuff.push({
+      sprite: sprites.air,
+      type: 'air',
+      pos: vec2(ii * 120 + rand.random() * 120, rand.floatBetween(16, game_height - 16)),
+      size: vec2(32, rand.floatBetween(32, 64)),
+      angle: 0,
+      rspeed: 0,
+      color: pico8.colors[12],
+      rsquared: 12*12,
+      freq: 0,
+      amp: 32,
+      z: Z.AIR,
+    });
+  }
+  for (let ii = 0; ii < state.stuff.length; ++ii) {
+    state.stuff[ii].pos0 = state.stuff[ii].pos.slice(0);
   }
 
 
-  const base_radius = 50;
   const speed_scale = 0.75;
   const dTheta = 0.002 * speed_scale;
   const accel = 0.0025;
+  const air_drag = 0.5;
+  const min_radius = 0.5 * base_radius;
+  let delta = vec2();
   function test(dt) {
     sprites.game_bg.draw({
       x: 0, y: 0, z: Z.BACKGROUND,
       color: pico8.colors[1],
     });
     camera2d.setAspectFixed(game_width, game_height);
-    camera2d.set(camera2d.x0() + state.cam_x, camera2d.y0(), camera2d.x1() + state.cam_x, camera2d.y1());
-    let { player } = state;
+
+    let { player, stuff } = state;
+    if (player.pos[0] > state.level_w) {
+      player.pos[0] -= state.level_w;
+      state.cam_x -= state.level_w;
+    } else if (player.pos[0] < 0) {
+      player.pos[0] += state.level_w;
+      state.cam_x += state.level_w;
+    }
+
+    let cam_x = floor(state.cam_x);
+    camera2d.set(camera2d.x0() + cam_x, camera2d.y0(), camera2d.x1() + cam_x, camera2d.y1());
+
+    // update stuff
+    let hit_air = false;
+    for (let ii = 0; ii < stuff.length; ++ii) {
+      let r = stuff[ii];
+      r.angle += r.rspeed * dt * 0.0002;
+      r.pos[1] = r.pos0[1] + r.amp * sin(r.freq * engine.frame_timestamp);
+      if (r.type === 'air') {
+        r.hit = player.pos[0] > r.pos[0] - r.size[0]/2 && player.pos[0] < r.pos[0] + r.size[0]/2 &&
+          player.pos[1] > r.pos[1] - r.size[1]/2 && player.pos[1] < r.pos[1] + r.size[1]/2;
+        if (r.hit) {
+          hit_air = true;
+        }
+      }
+    }
+
+    // update player
     let { radius } = player;
     if (input.keyDown(KEYS.D)) {
       player.radius = min(2, radius + dt * accel);
@@ -149,7 +254,7 @@ export function main() {
     //   test_pos[0] += state.speed * test_dp * cos(test_angle);
     //   test_pos[1] += state.speed * test_dp * sin(test_angle);
     //   test_angle -= test_dt * dTheta;
-    //   // ui.drawLine(last_pos[0], last_pos[1], test_pos[0], test_pos[1], Z.SPRITES - 1, 2, 1, [0,0,0,0.5]);
+    //   // ui.drawLine(last_pos[0], last_pos[1], test_pos[0], test_pos[1], Z.PLAYER - 1, 2, 1, [0,0,0,0.5]);
     //   v2copy(last_pos, test_pos);
     //   if (test_pos[1] < 0) {
     //     offs = max(offs, -test_pos[1]);
@@ -180,7 +285,7 @@ export function main() {
     let hoffs = tan(inter_angle) * dist_to_top;
     let max_r = hoffs / sin(PI - test_angle) - 0.5 + rbias;
     //let maxs_center = vec2(player.pos[0] + max_r * cos(angle + PI/2), player.pos[1] + max_r * sin(angle + PI/2));
-    //ui.drawHollowCircle(maxs_center[0], maxs_center[1], Z.SPRITES - 1, max_r, 0.99, [1,1,1, 0.5]);
+    //ui.drawHollowCircle(maxs_center[0], maxs_center[1], Z.PLAYER - 1, max_r, 0.99, [1,1,1, 0.5]);
 
     // Test angle against the bottom of the screen (y = 0)
     test_angle = angle - PI;
@@ -201,11 +306,27 @@ export function main() {
     hoffs = tan(inter_angle) * dist_to_bottom;
     let max_r2 = hoffs / sin(PI - test_angle) - 0.5 + rbias;
     // let maxs_center = vec2(player.pos[0] + max_r2 * cos(angle + PI/2), player.pos[1] + max_r2 * sin(angle + PI/2));
-    // ui.drawHollowCircle(maxs_center[0], maxs_center[1], Z.SPRITES - 1, max_r2, 0.99, [1,1,1, 0.5]);
+    // ui.drawHollowCircle(maxs_center[0], maxs_center[1], Z.PLAYER - 1, max_r2, 0.99, [1,1,1, 0.5]);
 
-    // ui.print(null, 50, 50, Z.SPRITES + 10, `angle: ${(angle * 180 / PI).toFixed(0)}`);
+    // ui.print(null, 50, 50, Z.PLAYER + 10, `angle: ${(angle * 180 / PI).toFixed(0)}`);
+    if (isFinite(max_r2)) {
+      if (isFinite(max_r)) {
+        max_r = min(max_r, max_r2);
+      } else {
+        max_r = max_r2;
+      }
+    }
     if (isFinite(max_r)) {
-      radius = min(radius, min(max_r, max_r2));
+      // let maxs_center = vec2(player.pos[0] + max_r * cos(angle + PI/2), player.pos[1] + max_r * sin(angle + PI/2));
+      // ui.drawHollowCircle(maxs_center[0], maxs_center[1], Z.PLAYER - 1, max_r, 0.99, [1,0,0, 0.5]);
+      // Instead of an absolute max, we want to reduce the radius only if
+      //  the *minimum* radius is not going to fit?
+      if (max_r > min_radius) {
+        max_r = (max_r - min_radius) * 4 + min_radius;
+      }
+      // maxs_center = vec2(player.pos[0] + max_r * cos(angle + PI/2), player.pos[1] + max_r * sin(angle + PI/2));
+      // ui.drawHollowCircle(maxs_center[0], maxs_center[1], Z.PLAYER - 1, max_r, 0.99, [0,1,0, 0.5]);
+      radius = min(radius, max_r);
     }
     // let dir = vec2(cos(angle), sin(angle));
     let new_angle = angle - dt * dTheta;
@@ -214,6 +335,13 @@ export function main() {
     }
     let center = vec2(player.pos[0] + radius * cos(angle + PI/2), player.pos[1] + radius * sin(angle + PI/2));
     let new_pos = vec2(center[0] - radius * cos(new_angle + PI/2), center[1] - radius * sin(new_angle + PI/2));
+    if (hit_air) {
+      // This is effectively no different than scaling the radius!
+      v2sub(delta, new_pos, player.pos);
+      v2scale(delta, delta, air_drag);
+      v2add(new_pos, player.pos, delta);
+    }
+    new_pos[1] = clamp(new_pos[1], 0, game_height);
     player.pos[0] = new_pos[0];
     player.pos[1] = new_pos[1];
     state.cam_x = min(max(state.cam_x, player.pos[0] - game_width * 2 / 3), player.pos[0] - game_width / 3);
@@ -221,36 +349,79 @@ export function main() {
     sprites.player.draw({
       x: player.pos[0],
       y: player.pos[1],
-      z: Z.SPRITES,
+      z: Z.PLAYER,
       rot: player.angle + PI,
       color: [1, 1, 1, 1],
     });
-    for (let ii = 0; ii < state.rocks.length; ++ii) {
-      let r = state.rocks[ii];
-      r.angle += r.rspeed * dt * 0.0002;
-      let hit = v2distSq(r.pos, player.pos) < 8*8;
-      if (hit) {
-        if (!r.hit) {
-          r.hit = true;
-          state.player.radius = 0.5;
-          state.player.angle += rand.floatBetween(0.5, 0.75);
-        }
-        r.color[0] = 1;
-        r.color[3] = 1;
+    let view_x0 = cam_x - 64;
+    let view_x1 = cam_x + game_width + 64;
+    for (let ii = 0; ii < stuff.length; ++ii) {
+      let r = stuff[ii];
+      if (r.hide) {
+        continue;
       }
-      sprites.rock.draw({
-        x: r.pos[0],
-        y: r.pos[1],
-        z: Z.SPRITES,
-        rot: r.angle,
-        color: r.color,
-      });
-      if (hit) {
-        r.color[3] = 0.5;
+      let frame;
+      let hit = false;
+      let w;
+      let h;
+      if (r.type === 'air') {
+        w = r.size[0];
+        h = r.size[1];
+        if (r.hit) {
+          r.color[3] = 1;
+        } else {
+          r.color[3] = 0.5;
+        }
+      } else {
+        hit = v2distSq(r.pos, player.pos) < r.rsquared;
+        if (hit) {
+          if (!r.hit) {
+            r.hit = true;
+            r.hit_fade = rock_fade_time;
+            if (r.type === 'rock') {
+              state.player.radius = 0.5;
+              state.player.angle += rand.floatBetween(0.5, 0.75);
+            }
+          }
+          if (r.type === 'rock') {
+            r.color[0] = 1;
+          } else {
+            r.color[0] = 0;
+            r.color[2] = 0;
+          }
+        }
+        if (r.hit) {
+          r.hit_fade -= dt;
+          if (r.hit_fade < 0) {
+            r.hide = true;
+            continue;
+          }
+          r.color[3] = r.hit_fade / rock_fade_time;
+        }
+        if (r.type === 'ring') {
+          frame = floor(r.frame + engine.frame_timestamp * 0.01) % 10;
+        }
+      }
+      let x = r.pos[0];
+      if (x > view_x1) {
+        x -= state.level_w;
+      } else if (x < view_x0) {
+        x += state.level_w;
+      }
+      if (x >= view_x0 && x <= view_x1) {
+        r.sprite.draw({
+          x,
+          y: r.pos[1],
+          z: r.z,
+          w, h,
+          rot: r.angle,
+          color: r.color,
+          frame,
+        });
       }
     }
 
-    ui.print(null, 50, game_height - 24, Z.SPRITES - 1, 'Controls: A and D');
+    ui.print(null, 50 + (cam_x > 500 ? state.level_w : 0), game_height - 33, Z.PLAYER - 1, 'Controls: A and D');
   }
 
   function testInit(dt) {
@@ -258,6 +429,5 @@ export function main() {
     test(dt);
   }
 
-  initGraphics();
   engine.setState(testInit);
 }

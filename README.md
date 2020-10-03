@@ -1,6 +1,13 @@
 LD47 -
 ============================
 
+Style:
+  space ship, alien planets backgrounds
+  avoid: rocks and other debris, aliens? dog-aliens? sputnik?
+Make level a loop
+Goal is to collect all rings
+Score is fewest number of hits?
+
 Biplane Loop
 Art:
   Plane
