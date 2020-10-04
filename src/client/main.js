@@ -325,6 +325,11 @@ export function main() {
 
   function initGraphics() {
     particles.preloadParticleData(particle_data);
+    sprites.dante = createSprite({
+      name: 'dante',
+      size: vec2(128,96),
+      origin: vec2(0.5,0),
+    });
     sprites.rock = createSprite({
       name: 'rock',
       size: vec2(16, 16),
@@ -1419,16 +1424,23 @@ export function main() {
   let title_seq;
   function title(dt) {
     title_seq.update(dt);
+    let y = 20;
     font2.drawSizedAligned(glov_font.styleAlpha(title_style, title_state.fade3),
-      0, 0, Z.UI, 32, font.ALIGN.HVCENTER, 320, 120,
+      0, y, Z.UI, 32, font.ALIGN.HCENTER, 320, 0,
       'Dante Slumbers');
 
-    let y = 82;
+    y += 32 + 5;
+
     font.drawSizedAligned(glov_font.styleAlpha(subtitle_style2, title_state.fade4),
       0, y, Z.UI, ui.font_height, font.ALIGN.HCENTER, 320, 0,
       'by Jimb Esser in 48 hours for Ludum Dare 47');
 
-    y = 120;
+    y += ui.font_height + 8;
+
+    y -= 12;
+    sprites.dante.draw({ x: game_width/2, y, color: [1,1,1,title_state.fade0] });
+    y += 96;
+
     font.drawSizedAligned(glov_font.styleAlpha(subtitle_style, title_state.fade1),
       0, y, Z.UI, ui.font_height, font.ALIGN.HCENTER, 320, 0,
       'Your cat, "Dante", has fallen asleep on the yoke.');
@@ -1463,20 +1475,23 @@ export function main() {
   function titleInit(dt) {
     killFX();
     title_state = {
+      fade0: 0,
       fade1: 0,
       fade2: 0,
       fade3: 0,
       fade4: 0,
     };
     title_seq = animation.create();
-    let t = title_seq.add(0, 300, (v) => (title_state.fade1 = v));
+    let t = title_seq.add(0, 300, (v) => (title_state.fade0 = v));
+    t = title_seq.add(t, 500, nop);
+    t = title_seq.add(t, 300, (v) => (title_state.fade1 = v));
     t = title_seq.add(t, 800, nop);
     t = title_seq.add(t, 300, (v) => (title_state.fade2 = v));
-    t = title_seq.add(t, 1500, nop);
+    t = title_seq.add(t, 1900, nop);
     t = title_seq.add(t, 300, (v) => (title_state.fade3 = v));
-    t = title_seq.add(t, 1500, nop);
+    t = title_seq.add(t, 500, nop);
     title_seq.add(t, 300, (v) => (title_state.fade4 = v));
-    if (!first_time || engine.DEBUG) {
+    if (!first_time) {
       title_seq.update(30000);
     }
     first_time = false;
@@ -1487,7 +1502,7 @@ export function main() {
 
   if (engine.DEBUG) {
     level_idx = 0;
-    engine.setState(playInit);
+    engine.setState(titleInit);
   } else {
     engine.setState(titleInit);
   }

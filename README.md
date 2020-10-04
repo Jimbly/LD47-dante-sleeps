@@ -1,12 +1,9 @@
 Dante Sleeps - LD47 - Stuck in a loop
 ============================
 
-cat on title screen
 ambient wind sounds or music
+  occasional cat meow / purr?
 touch up plane
-? subtle indicator of current arc and thrust amount?
-  put it in, but even more subtle?
-  show the min/max cone and a fine line?
 fix air drafts not disappearing during win anim
 
 finalizing:
