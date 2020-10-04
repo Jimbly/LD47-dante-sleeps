@@ -2,17 +2,19 @@
 const glov_local_storage = require('./glov/local_storage.js');
 glov_local_storage.storage_prefix = 'ld47'; // Before requiring anything else that might load from this
 
+const assert = require('assert');
 const animation = require('./glov/animation.js');
 const camera2d = require('./glov/camera2d.js');
 const engine = require('./glov/engine.js');
 const glov_font = require('./glov/font.js');
 const input = require('./glov/input.js');
-const { cos, floor, max, min, sin, tan, PI, sqrt } = Math;
+const { cos, floor, max, min, sin, tan, PI, round, sqrt } = Math;
 const net = require('./glov/net.js');
 const particles = require('./glov/particles.js');
 const particle_data = require('./particle_data.js');
 const pico8 = require('./glov/pico8.js');
 const { randCreate } = require('./glov/rand_alea.js');
+const score_system = require('./glov/score.js');
 const glov_sprites = require('./glov/sprites.js');
 // const sprite_animation = require('./glov/sprite_animation.js');
 // const transition = require('./glov/transition.js');
@@ -29,6 +31,7 @@ const {
   v2scale,
   v2sub,
   vec4,
+  v4lerp,
 } = require('./glov/vmath.js');
 
 window.Z = window.Z || {};
@@ -107,6 +110,50 @@ export function main() {
   const KEYS = input.KEYS;
   //const PAD = input.PAD;
 
+  let levels = [
+    {
+      name: '1',
+      seed: 3,
+      rdense: 100,
+      safe_zone: 320,
+      safe_clear: true,
+      num_rings: 4,
+      ring_dense: 200,
+      air_dense: 0,
+      ring_amp: 0,
+    },
+    {
+      name: 'test',
+      seed: 4,
+      rdense: 16,
+      safe_zone: 320,
+      num_rings: 10,
+      ring_dense: 160,
+      air_dense: 230,
+      ring_amp: 32,
+    },
+  ];
+
+  function encodeScore(score) {
+    assert(score.time && score.hits >= 0);
+    let time = min(score.time, 999999);
+    return (999 - score.hits) * 1000000 +
+      (999999 - time);
+  }
+
+  function parseScore(value) {
+    let hits = floor(value / (1000000));
+    value -= hits * 1000000;
+    let time = value;
+    return {
+      hits: 999 - hits,
+      time: 999999 - time,
+    };
+  }
+
+  score_system.init(encodeScore, parseScore, levels, 'LD47');
+  score_system.updateHighScores();
+
   function initGraphics() {
     particles.preloadParticleData(particle_data);
     sprites.rock = createSprite({
@@ -160,18 +207,27 @@ export function main() {
   const base_radius = 50;
   let state;
   let rand;
-  function setupLevel(seed) {
+  let cur_level_idx;
+  function setupLevel(level_idx) {
+    cur_level_idx = level_idx;
+    let level = levels[level_idx];
+    let {
+      seed,
+      rdense,
+      safe_zone,
+      safe_clear,
+      num_rings,
+      ring_dense,
+      ring_amp,
+      air_dense,
+    } = level;
     engine.glov_particles.killAll();
     rand = randCreate(seed);
-    let rdense = 16;
-    let safe_zone = 320;
-    let num_rings = 10;
-    let ring_dense = 160;
-    let air_dense = 230;
     let level_w = ring_dense * (num_rings + 1);
     state = {
       num_rings,
       level_w,
+      time: 0,
       hit_rings: 0,
       hit_rocks: 0,
       cam_x: -game_width / 2 + 160,
@@ -185,6 +241,7 @@ export function main() {
       do_win: false,
       win_counter: 0,
       bg_data: [],
+      last_hit_time: 0,
     };
     state.last_part_pos = state.player.pos.slice(0);
     let num_rocks = floor(state.level_w / rdense);
@@ -192,6 +249,9 @@ export function main() {
       let x = (ii + rand.random()) * rdense;
       let y = rand.floatBetween(16, game_height - 16*2);
       if (x < safe_zone) {
+        if (safe_clear) {
+          continue;
+        }
         y = y < game_height / 2 ? y * 0.1 : game_height - (game_height - y) * 0.1;
       }
       state.stuff.push({
@@ -202,6 +262,7 @@ export function main() {
         rspeed: rand.floatBetween(-1, 1),
         color: vec4(1,1,1, 1),
         freq: 0, // 0.001 * rand.random(),
+        freq_offs: rand.random() * PI * 2,
         amp: 40,
         rsquared: 8*8,
         frame: rand.range(4),
@@ -218,8 +279,9 @@ export function main() {
         frame: rand.floatBetween(0, 10),
         color: vec4(1,1,1, 1),
         rsquared: 12*12,
-        freq: 0.001,
-        amp: 32,
+        freq: 0.0013,
+        freq_offs: rand.random() * PI * 2,
+        amp: ring_amp,
         z: Z.RINGS,
       });
     }
@@ -236,6 +298,7 @@ export function main() {
         color: pico8.colors[12],
         rsquared: 12*12,
         freq: 0,
+        freq_offs: rand.random() * PI * 2,
         amp: 32,
         z: Z.AIR - 1,
       };
@@ -305,9 +368,9 @@ export function main() {
   let hits_style_yellow = glov_font.style(hits_style_green, {
     color: pico8.font_colors[10],
   });
-  let hits_style_red = glov_font.style(hits_style_green, {
-    color: pico8.font_colors[8],
-  });
+  // let hits_style_red = glov_font.style(hits_style_green, {
+  //   color: pico8.font_colors[8],
+  // });
 
   const speed_scale = 0.75;
   const dTheta = 0.002 * speed_scale;
@@ -419,6 +482,15 @@ export function main() {
     engine.glov_particles.shift([shift_dist, 0, 0]);
   }
 
+  function triggerWin() {
+    state.do_win = !state.do_win;
+    state.win_counter = 0;
+    score_system.setScore(cur_level_idx,
+      { hits: state.hit_rocks, time: round(state.time / 10) }
+    );
+  }
+
+  let temp_color = vec4();
   function play(dt) {
     sprites.game_bg.draw({
       x: 0, y: 0, z: Z.BACKGROUND,
@@ -433,8 +505,7 @@ export function main() {
     }
 
     if (engine.DEBUG && input.keyDownEdge(KEYS.F1)) {
-      state.do_win = !state.do_win;
-      state.win_counter = 0;
+      triggerWin();
     }
 
     if (input.keyDownEdge(KEYS.F2)) {
@@ -446,7 +517,7 @@ export function main() {
         text: 'Really quit?',
         buttons: {
           // eslint-disable-next-line no-use-before-define
-          Yes: () => engine.setState(titleInit),
+          Yes: () => engine.setState(levelSelectInit),
           No: null,
         },
       });
@@ -459,7 +530,7 @@ export function main() {
     for (let ii = 0; ii < stuff.length; ++ii) {
       let r = stuff[ii];
       r.angle += r.rspeed * dt * 0.0002;
-      r.pos[1] = r.pos0[1] + r.amp * sin(r.freq * engine.frame_timestamp);
+      r.pos[1] = r.pos0[1] + r.amp * sin(r.freq * engine.frame_timestamp + r.freq_offs);
     }
 
     // update player
@@ -516,6 +587,10 @@ export function main() {
       player.pos[0] = new_pos[0];
       player.pos[1] = new_pos[1];
       emitSmoke();
+      if (player.pos[1] < -100) {
+        // eslint-disable-next-line no-use-before-define
+        engine.setState(levelSelectInit);
+      }
     } else {
       let { radius } = player;
       if (input.keyDown(KEYS.D) || input.mouseDown({
@@ -543,6 +618,7 @@ export function main() {
         step_dt -= 16;
         emitSmoke();
       }
+      state.time += dt;
     }
     let new_cam_x = min(max(state.cam_x, floor(player.pos[0]) - game_width * 2 / 3),
       floor(player.pos[0]) - game_width / 3);
@@ -615,6 +691,7 @@ export function main() {
             if (r.type === 'rock') {
               r.hit_fade = rock_fade_time;
               state.hit_rocks++;
+              state.last_hit_time = engine.frame_timestamp;
               state.player.radius = 0.5;
               state.player.angle += rand.floatBetween(0.5, 0.75);
               engine.glov_particles.createSystem(particle_data.defs.crash,
@@ -627,8 +704,7 @@ export function main() {
                 [r.pos[0], r.pos[1], Z.PARTICLE_CRASH]
               );
               if (state.hit_rings === state.num_rings) {
-                state.do_win = true;
-                state.win_counter = 0;
+                triggerWin();
               }
             }
           }
@@ -736,8 +812,12 @@ export function main() {
     let score_size = 100;
     title_font.drawSizedAligned(hud_style, game_width - score_size, game_height - 16, Z.UI, 26,
       font.ALIGN.HCENTER|font.ALIGN.VBOTTOM, score_size, 0, `${state.hit_rings}/${state.num_rings}`);
+    let time_since_hit = engine.frame_timestamp - state.last_hit_time;
     font.drawSizedAligned(
-      !state.hit_rocks ? hits_style_green : state.hit_rocks < 3 ? hits_style_yellow : hits_style_red,
+      !state.hit_rocks ? hits_style_green : glov_font.styleColored(hits_style_yellow,
+        glov_font.intColorFromVec4Color(
+          v4lerp(temp_color, min(time_since_hit/1000, 1), pico8.colors[8], pico8.colors[10]))
+      ),
       game_width - score_size, game_height - 4, Z.UI, ui.font_height,
       font.ALIGN.HCENTER|font.ALIGN.VBOTTOM, score_size, 0, `${state.hit_rocks} hits`);
 
@@ -746,9 +826,10 @@ export function main() {
     camera2d.set(camera2d.x0() + cam_x, camera2d.y0(), camera2d.x1() + cam_x, camera2d.y1());
   }
 
+  let level_idx = 0;
   function playInit(dt) {
     engine.setState(play);
-    setupLevel(4);
+    setupLevel(level_idx);
     play(dt);
   }
 
@@ -766,6 +847,205 @@ export function main() {
   let subtitle_style2 = glov_font.style(subtitle_style, {
     color: pico8.font_colors[5],
   });
+
+  function pad2(v) {
+    return (`0${v}`).slice(-2);
+  }
+  function formatTime(t) {
+    let hs = t % 100;
+    t = (t - hs) / 100;
+    let s = t % 60;
+    t = (t - s) / 60;
+    let m = t;
+    return `${m}:${pad2(s)}.${pad2(hs)}`;
+  }
+
+  let scores_edit_box;
+  function showHighScores(y) {
+    let width = game_width * 0.75;
+    let x = (game_width - width) / 2;
+    // let y0 = y;
+    let z = Z.MODAL + 10;
+    let size = 8;
+    let pad = size;
+    font.drawSizedAligned(null, x, y, z, size * 2, glov_font.ALIGN.HCENTERFIT, width, 0, 'HIGH SCORES');
+    y += size * 2 + 2;
+    let level_id = levels[level_idx].name;
+    let scores = score_system.high_scores[level_id];
+    let score_style = glov_font.styleColored(null, pico8.font_colors[7]);
+    if (!scores) {
+      font.drawSizedAligned(score_style, x, y, z, size, glov_font.ALIGN.HCENTERFIT, width, 0,
+        'Loading...');
+      return;
+    }
+    let widths = [10, 60, 24, 24];
+    let widths_total = 0;
+    for (let ii = 0; ii < widths.length; ++ii) {
+      widths_total += widths[ii];
+    }
+    let set_pad = size / 2;
+    for (let ii = 0; ii < widths.length; ++ii) {
+      widths[ii] *= (width - set_pad * (widths.length - 1)) / widths_total;
+    }
+    let align = [
+      glov_font.ALIGN.HFIT | glov_font.ALIGN.HRIGHT,
+      glov_font.ALIGN.HFIT,
+      glov_font.ALIGN.HFIT | glov_font.ALIGN.HCENTER,
+      glov_font.ALIGN.HFIT | glov_font.ALIGN.HCENTER,
+    ];
+    function drawSet(arr, style, header) {
+      let xx = x;
+      for (let ii = 0; ii < arr.length; ++ii) {
+        let str = String(arr[ii]);
+        font.drawSizedAligned(style, xx, y, z, size, align[ii], widths[ii], 0, str);
+        xx += widths[ii] + set_pad;
+      }
+      y += size;
+    }
+    drawSet(['', 'Name', 'Hits', 'Time'], glov_font.styleColored(null, pico8.font_colors[6]), true);
+    y += 4;
+    let found_me = false;
+    for (let ii = 0; ii < scores.length; ++ii) {
+      let s = scores[ii];
+      let style = score_style;
+      let drawme = false;
+      if (s.name === score_system.player_name) {
+        style = glov_font.styleColored(null, pico8.font_colors[11]);
+        found_me = true;
+        drawme = true;
+      }
+      if (ii < 15 || drawme) {
+        drawSet([`#${ii+1}`, score_system.formatName(s), s.score.hits, formatTime(s.score.time)], style);
+      }
+    }
+    y += set_pad;
+    if (found_me && score_system.player_name.indexOf('Anonymous') === 0) {
+      if (!scores_edit_box) {
+        scores_edit_box = ui.createEditBox({
+          z,
+          w: game_width / 4,
+        });
+        scores_edit_box.setText(score_system.player_name);
+      }
+
+      if (scores_edit_box.run({
+        x,
+        y,
+      }) === scores_edit_box.SUBMIT || ui.buttonText({
+        x: x + scores_edit_box.w + size,
+        y: y - size * 0.25,
+        z,
+        w: size * 13,
+        h: ui.button_height,
+        text: 'Update Player Name'
+      })) {
+        // scores_edit_box.text
+        if (scores_edit_box.text) {
+          score_system.updatePlayerName(scores_edit_box.text);
+        }
+      }
+      y += size;
+    }
+
+    y += pad;
+
+    // ui.panel({
+    //   x: x - pad,
+    //   w: game_width / 2 + pad * 2,
+    //   y: y0 - pad,
+    //   h: y - y0 + pad * 2,
+    //   z: z - 1,
+    //   color: vec4(0, 0, 0, 1),
+    // });
+
+    // ui.menuUp();
+  }
+
+  function hasCompleted(idx) {
+    // if (levels[idx].saved && levels[idx].saved.ever_complete) {
+    //   return true;
+    // }
+    if (score_system.getScore(idx)) {
+      return true;
+    }
+    return false;
+  }
+
+  let colors_green = ui.makeColorSet([0,1,0,1]);
+
+  function levelSelect(dt) {
+    let y = 4;
+    let header_h = 26;
+    title_font.drawSizedAligned(title_style,
+      0, y, Z.UI, header_h, font.ALIGN.HCENTER, 320, 0,
+      `Level: ${levels[level_idx].name}`);
+
+    if (ui.buttonText({
+      x: 8,
+      y,
+      h: header_h,
+      w: header_h,
+      text: '<<',
+      disabled: !level_idx,
+    }) || level_idx && input.keyDownEdge(KEYS.A)) {
+      --level_idx;
+    }
+    if (ui.buttonText({
+      x: 320 - header_h - 8,
+      y,
+      h: header_h,
+      w: header_h,
+      text: '>>',
+      disabled: level_idx === levels.length - 1,
+    }) || level_idx !== levels.length - 1 && input.keyDownEdge(KEYS.D)) {
+      ++level_idx;
+    }
+
+    y += header_h + 4;
+
+    let completed = hasCompleted(level_idx);
+    let has_next = completed && level_idx !== levels.length - 1;
+    let button_w = ui.button_width * 1.5;
+    if (ui.buttonText({
+      key: has_next ? 'replay' : 'play_button',
+      x: (has_next ? 320/4 : 320/2) - button_w/2,
+      y,
+      w: button_w,
+      h: ui.button_height * 2,
+      font_height: ui.font_height * 2,
+      text: completed ? 'Retry' : 'Play',
+    })) {
+      engine.setState(playInit);
+    }
+
+    if (has_next) {
+      if (ui.buttonText({
+        key: 'play_button',
+        x: 320*3/4 - button_w/2,
+        y,
+        w: button_w,
+        h: ui.button_height * 2,
+        font_height: ui.font_height * 2,
+        text: 'Next Level',
+        colors: colors_green,
+      })) {
+        ++level_idx;
+      }
+    }
+
+    y += ui.button_height * 2 + 4;
+
+    showHighScores(y);
+  }
+
+  function levelSelectInit(dt) {
+    engine.glov_particles.killAll();
+    engine.setState(levelSelect);
+    score_system.updateHighScores();
+    ui.focusSteal('play_button');
+    levelSelect(dt);
+  }
+
   let title_state;
   let title_seq;
   function title(dt) {
@@ -797,18 +1077,11 @@ export function main() {
 
     if (title_state.fade3) {
       if (ui.buttonText({
-        x: 320/2 - ui.button_width - 4,
+        x: 320/2 - ui.button_width/2,
         y,
         text: 'Play'
       })) {
-        engine.setState(playInit);
-      }
-      if (ui.buttonText({
-        x: 320/2 + 4,
-        y,
-        text: 'High Scores'
-      })) {
-        // TODO
+        engine.setState(levelSelectInit);
       }
     }
     y += ui.button_height + 16;
@@ -841,5 +1114,10 @@ export function main() {
     title(dt);
   }
 
-  engine.setState(titleInit);
+  if (engine.DEBUG) {
+    level_idx = 1;
+    engine.setState(playInit);
+  } else {
+    engine.setState(titleInit);
+  }
 }
