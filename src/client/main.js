@@ -148,9 +148,9 @@ export function main() {
   ];
 
   function encodeScore(score) {
-    assert(score.time && score.hits >= 0 && score.rings);
+    assert(score.time && score.hits >= 0/* && score.rings*/); // some old scores had no rings
     let time = min(score.time, 999999);
-    return score.rings * 1000000 * 1000 +
+    return (score.rings || 0) * 1000000 * 1000 +
       (999 - score.hits) * 1000000 +
       (999999 - time);
   }
@@ -706,7 +706,7 @@ export function main() {
     });
 
     // draw flight preview
-    if (show_preview) {
+    if (show_preview && !state.do_win) {
       let test_player = {
         pos: player.pos.slice(0),
         angle: player.angle,
@@ -819,10 +819,12 @@ export function main() {
       }
     }
 
-    ui.print(glov_font.styleAlpha(null, fade), 50 + (cam_x > game_width ? state.level_w : 0),
-      game_height - 32 - ui.font_height - 1, Z.PLAYER - 1, 'Controls: A and D');
-    ui.print(glov_font.styleAlpha(null, fade), 50 + (cam_x > game_width ? state.level_w : 0),
-      game_height - 32, Z.PLAYER - 1, '  or Touch left/right half of display');
+    if (cur_level_idx === 0) {
+      ui.print(glov_font.styleAlpha(null, fade), 50 + (cam_x > game_width ? state.level_w : 0),
+        game_height - 32 - ui.font_height - 1, Z.PLAYER - 1, 'Controls: A and D');
+      ui.print(glov_font.styleAlpha(null, fade), 50 + (cam_x > game_width ? state.level_w : 0),
+        game_height - 32, Z.PLAYER - 1, '  or Touch left/right half of display');
+    }
 
     camera2d.setAspectFixed(game_width, game_height);
     // Background
@@ -1034,7 +1036,8 @@ export function main() {
     // if (levels[idx].saved && levels[idx].saved.ever_complete) {
     //   return true;
     // }
-    if (score_system.getScore(idx)) {
+    let score = score_system.getScore(idx);
+    if (score && score.rings === levels[idx].num_rings) {
       return true;
     }
     return false;
@@ -1099,6 +1102,9 @@ export function main() {
         colors: colors_green,
       })) {
         ++level_idx;
+        if (!hasCompleted(level_idx)) {
+          engine.setState(playInit);
+        }
       }
     }
 

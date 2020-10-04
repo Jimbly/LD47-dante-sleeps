@@ -4,7 +4,6 @@ LD47 -
 avoid: other debris? aliens?
 ? subtle indicator of current arc and thrust amount?
 background: fade colors, add stars, clouds (just crossfade?)
-new button graphic
 ambient wind sounds or music
 final level set
 more detail on backgrounds

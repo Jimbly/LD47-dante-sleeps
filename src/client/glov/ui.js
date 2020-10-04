@@ -231,12 +231,12 @@ export function startup(param) {
     pad_focus_right = PAD.RIGHT_BUMPER;
   }
 
-  loadUISprite('button', [4, 5, 4], [13], overrides);
+  loadUISprite('button', [6, 1, 6], [13], overrides);
   sprites.button_regular = sprites.button;
-  loadUISprite('button_rollover', [4, 5, 4], [13], overrides, true);
-  loadUISprite('button_down', [4, 5, 4], [13], overrides);
-  loadUISprite('button_disabled', [4, 5, 4], [13], overrides);
-  loadUISprite('panel', [3, 2, 3], [3, 10, 3], overrides);
+  loadUISprite('button_rollover', [6, 1, 6], [13], overrides, true);
+  loadUISprite('button_down', [6, 1, 6], [13], overrides);
+  loadUISprite('button_disabled', [6, 1, 6], [13], overrides);
+  loadUISprite('panel', [7, 2, 7], [7, 2, 7], overrides);
   loadUISprite('menu_entry', [4, 5, 4], [13], overrides);
   loadUISprite('menu_selected', [4, 5, 4], [13], overrides);
   loadUISprite('menu_down', [4, 5, 4], [13], overrides);
