@@ -1,4 +1,4 @@
-Dante Sleeps - LD47 - Stuck in a loop
+Dante Slumbers - LD47 - Stuck in a loop
 ============================
 
 Ludum Dare 47 Entry by Jimbly - "Dante Slumbers"
