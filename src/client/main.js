@@ -111,6 +111,9 @@ export function main() {
 
   let thrust_sound;
 
+  let font2 = glov_font.create(require('./img/font/vga_16x2.json'), 'font/vga_16x2');
+
+
   // const font = engine.font;
 
   // Perfect sizes for pixely modes
@@ -1308,7 +1311,7 @@ export function main() {
   function levelSelect(dt) {
     let y = 4;
     let header_h = 26;
-    title_font.drawSizedAligned(title_style,
+    font2.drawSizedAligned(title_style,
       0, y, Z.UI, header_h, font.ALIGN.HCENTER, 320, 0,
       `${level_idx+1}/${levels.length} ${levels[level_idx].display_name || levels[level_idx].name}`);
 
@@ -1395,7 +1398,7 @@ export function main() {
   let title_seq;
   function title(dt) {
     title_seq.update(dt);
-    title_font.drawSizedAligned(glov_font.styleAlpha(title_style, title_state.fade3),
+    font2.drawSizedAligned(glov_font.styleAlpha(title_style, title_state.fade3),
       0, 0, Z.UI, 32, font.ALIGN.HVCENTER, 320, 120,
       'Dante Slumbers');
 
@@ -1452,7 +1455,7 @@ export function main() {
     t = title_seq.add(t, 300, (v) => (title_state.fade3 = v));
     t = title_seq.add(t, 1500, nop);
     title_seq.add(t, 300, (v) => (title_state.fade4 = v));
-    if (!first_time) {
+    if (!first_time || engine.DEBUG) {
       title_seq.update(30000);
     }
     first_time = false;
@@ -1463,7 +1466,7 @@ export function main() {
 
   if (engine.DEBUG) {
     level_idx = 0;
-    engine.setState(playInit);
+    engine.setState(titleInit);
   } else {
     engine.setState(titleInit);
   }
