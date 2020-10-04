@@ -19,7 +19,7 @@ const glov_sprites = require('./glov/sprites.js');
 // const sprite_animation = require('./glov/sprite_animation.js');
 const transition = require('./glov/transition.js');
 const ui = require('./glov/ui.js');
-const { clamp, nop } = require('../common/util.js');
+const { clamp, nop, easeIn, easeOut } = require('../common/util.js');
 const { soundPlay } = require('./glov/sound.js');
 const {
   vec2,
@@ -56,6 +56,10 @@ const rock_fade_time = 500;
 const ring_fade_time = 1000;
 
 export let sprites = {};
+
+function pad2(v) {
+  return (`0${v}`).slice(-2);
+}
 
 export function main() {
   if (engine.DEBUG) {
@@ -644,6 +648,11 @@ export function main() {
   // let hits_style_red = glov_font.style(hits_style_green, {
   //   color: pico8.font_colors[8],
   // });
+  let time_style = glov_font.style(null, {
+    outline_width: 3,
+    outline_color: pico8.font_colors[0],
+    color: pico8.font_colors[7],
+  });
 
   const speed_scale = 0.75;
   const dTheta = 0.002 * speed_scale;
@@ -651,7 +660,15 @@ export function main() {
   const air_drag = 0.5;
   const min_radius = 0.5 * base_radius;
   let delta = vec2();
-  let show_preview = false;
+  let show_preview = true;
+
+  function radiusMap(r) {
+    if (r < 1) {
+      return easeIn((r - 0.5) * 2, 1.75) * 0.5 + 0.5;
+    } else {
+      return easeOut(r - 1, 1.75) + 1;
+    }
+  }
 
   function stepPlayer(player, dt) {
     let hit_air = false;
@@ -667,7 +684,7 @@ export function main() {
       }
     }
 
-    let radius = player.radius * base_radius;
+    let radius = radiusMap(player.radius) * base_radius;
     let { angle } = player;
     // Test angle against the top of the screen (y = 0)
     let test_angle = angle;
@@ -885,6 +902,7 @@ export function main() {
           player.angle = PI;
         }
       }
+      player.radius = 1;
       let dist = -dt * speed_scale * 0.2;
       let new_pos = vec2(player.pos[0] + cos(player.angle) * dist, player.pos[1] + sin(player.angle) * dist);
       if (player.angle === PI) {
@@ -978,7 +996,7 @@ export function main() {
       for (let ii = 0; len >= 0; ++ii) {
         stepPlayer(test_player, 16);
         ui.drawLine(last_pos[0], last_pos[1], test_player.pos[0], test_player.pos[1], Z.PLAYER - 1, 2, 0.9,
-          [1,1,1,0.5 * len/32]);
+          [1,1,1,0.125 * len/32]);
         len -= sqrt(v2distSq(last_pos, test_player.pos));
         v2copy(last_pos, test_player.pos);
       }
@@ -1140,7 +1158,7 @@ export function main() {
     // ui.print(null, 5, 5, Z.UI, `player_x:${player.pos[0]}`);
 
     let score_size = 100;
-    title_font.drawSizedAligned(hud_style, game_width - score_size, game_height - 16, Z.UI, 26,
+    title_font.drawSizedAligned(hud_style, game_width - score_size, game_height - 20, Z.UI, 26,
       font.ALIGN.HCENTER|font.ALIGN.VBOTTOM, score_size, 0, `${state.hit_rings}/${state.num_rings}`);
     let time_since_hit = engine.frame_timestamp - state.last_hit_time;
     font.drawSizedAligned(
@@ -1148,8 +1166,14 @@ export function main() {
         glov_font.intColorFromVec4Color(
           v4lerp(temp_color, min(time_since_hit/1000, 1), pico8.colors[8], pico8.colors[10]))
       ),
-      game_width - score_size, game_height - 4, Z.UI, ui.font_height,
+      game_width - score_size, game_height - 12, Z.UI, ui.font_height,
       font.ALIGN.HCENTER|font.ALIGN.VBOTTOM, score_size, 0, `${state.hit_rocks} hits`);
+    let ts = floor((state.time % 1000) / 100);
+    let ss = floor(state.time / 1000) % 60;
+    let ms = floor(state.time / (60*1000));
+    font.drawSizedAligned(time_style,
+      game_width - score_size, game_height - 2, Z.UI, ui.font_height,
+      font.ALIGN.HCENTER|font.ALIGN.VBOTTOM, score_size, 0, `${ms}:${pad2(ss)}.${ts}`);
 
     // Reset camera for particles
     camera2d.setAspectFixed(game_width, game_height);
@@ -1178,16 +1202,13 @@ export function main() {
     color: pico8.font_colors[5],
   });
 
-  function pad2(v) {
-    return (`0${v}`).slice(-2);
-  }
   function formatTime(t) {
     let hs = t % 100;
     t = (t - hs) / 100;
     let s = t % 60;
     t = (t - s) / 60;
     let m = t;
-    return `${m}:${pad2(s)}.${pad2(hs)}`;
+    return `${m}:${pad2(s)}.${floor(hs/10)}`;
   }
 
   let scores_edit_box;
@@ -1466,7 +1487,7 @@ export function main() {
 
   if (engine.DEBUG) {
     level_idx = 0;
-    engine.setState(titleInit);
+    engine.setState(playInit);
   } else {
     engine.setState(titleInit);
   }
