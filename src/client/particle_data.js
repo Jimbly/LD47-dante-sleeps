@@ -169,6 +169,7 @@ defs.pickup = {
 };
 
 defs.air = {
+  no_shift: true,
   particles: {
     part0: {
       blend: 'alpha',

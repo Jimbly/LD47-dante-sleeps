@@ -413,6 +413,9 @@ class ParticleSystem {
   }
 
   shift(delta) {
+    if (this.def.no_shift) {
+      return;
+    }
     this.pos[0] += delta[0];
     this.pos[1] += delta[1];
     this.pos[2] += delta[2];

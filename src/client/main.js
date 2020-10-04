@@ -19,7 +19,7 @@ const glov_sprites = require('./glov/sprites.js');
 // const sprite_animation = require('./glov/sprite_animation.js');
 const transition = require('./glov/transition.js');
 const ui = require('./glov/ui.js');
-const { clamp, lerp, nop } = require('../common/util.js');
+const { clamp, nop } = require('../common/util.js');
 const { soundPlay } = require('./glov/sound.js');
 const {
   vec2,
@@ -185,8 +185,48 @@ export function main() {
   let bg_set4 = ['hill_big1g', 'hill_big2g']; // farBgStars
   let bg_set5 = ['hill_big1', 'clouds', 'hill_big2', 'hill2b', 'hill']; // farBgCycle.bind(null, color_cycle_daynight)
   let levels = [
-    {
-      name: '1',
+    { // 2 hits, 0:48
+      name: 'add_air',
+      display_name: 'Air Drafts',
+      seed: 9,
+      rdense: 40,
+      safe_zone: 320,
+      num_rings: 8,
+      ring_dense: 120,
+      air_dense: 190,
+      ring_amp: 0,
+      far_bg: farBgCycle.bind(null, color_cycle_daynight),
+      bg_set: bg_set5,
+    },
+    { // 12 hits, 1:07
+      name: 'moving_rings',
+      display_name: 'Movin\' Rings',
+      seed: 6,
+      rdense: 16,
+      safe_zone: 320,
+      num_rings: 6,
+      ring_dense: 160,
+      air_dense: 0,
+      ring_amp: 32,
+      far_bg: farBgCycle.bind(null, color_cycle_alien),
+      bg_set: bg_set2,
+    },
+    { // 0 hits, 2 minutes
+      name: 'time_attack',
+      display_name: 'Time Attack',
+      seed: 5,
+      rdense: 0,
+      safe_zone: 320,
+      safe_clear: true,
+      num_rings: 20,
+      ring_dense: 30,
+      air_dense: 230,
+      ring_amp: 0,
+      far_bg: farBgStars,
+      bg_set: bg_set4,
+    },
+    { // first
+      name: 'intro',
       seed: 3,
       rdense: 100,
       safe_zone: 320,
@@ -347,7 +387,7 @@ export function main() {
       last_hit_time: 0,
     };
     state.last_part_pos = state.player.pos.slice(0);
-    let num_rocks = floor(state.level_w / rdense);
+    let num_rocks = rdense ? floor(state.level_w / rdense) : 0;
     for (let ii = 0; ii < num_rocks; ++ii) {
       let x = (ii + rand.random()) * rdense;
       let y = rand.floatBetween(16, game_height - 16);
@@ -409,6 +449,17 @@ export function main() {
       engine.glov_particles.createSystem(particle_data.defs[tall ? 'air_tall' : 'air'],
         [thing.pos[0], thing.pos[1], Z.AIR]
       );
+      if (thing.pos[0] > level_w - game_width - 100) {
+        engine.glov_particles.createSystem(particle_data.defs[tall ? 'air_tall' : 'air'],
+          [thing.pos[0] - level_w, thing.pos[1], Z.AIR]
+        );
+      }
+      if (thing.pos[0] < game_width + 100) {
+        engine.glov_particles.createSystem(particle_data.defs[tall ? 'air_tall' : 'air'],
+          [thing.pos[0] + level_w, thing.pos[1], Z.AIR]
+        );
+      }
+
     }
     for (let ii = 0; ii < state.stuff.length; ++ii) {
       state.stuff[ii].pos0 = state.stuff[ii].pos.slice(0);
@@ -643,6 +694,16 @@ export function main() {
       v2sub(delta, new_pos, player.pos);
       v2scale(delta, delta, air_drag);
       v2add(new_pos, player.pos, delta);
+    }
+    if (engine.DEBUG) {
+      if (input.keyDown(KEYS.RIGHT)) {
+        new_pos[0] = player.pos[0] + dt * 0.2;
+        new_pos[1] = player.pos[1];
+      }
+      if (input.keyDown(KEYS.LEFT)) {
+        new_pos[0] = player.pos[0] - dt * 0.2;
+        new_pos[1] = player.pos[1];
+      }
     }
     player.angle = new_angle;
     new_pos[1] = clamp(new_pos[1], 0, game_height);
@@ -1029,7 +1090,7 @@ export function main() {
     }
 
     // HUD
-    //ui.print(null, 5, 5, Z.UI, `cam_x:${cam_x}`);
+    // ui.print(null, 5, 5, Z.UI, `player_x:${player.pos[0]}`);
 
     let score_size = 100;
     title_font.drawSizedAligned(hud_style, game_width - score_size, game_height - 16, Z.UI, 26,
@@ -1205,7 +1266,7 @@ export function main() {
     let header_h = 26;
     title_font.drawSizedAligned(title_style,
       0, y, Z.UI, header_h, font.ALIGN.HCENTER, 320, 0,
-      `Level: ${levels[level_idx].name}`);
+      levels[level_idx].display_name || levels[level_idx].name);
 
     let eff_level_idx = level_idx;
     let completed = hasCompleted(level_idx);
@@ -1357,7 +1418,7 @@ export function main() {
   }
 
   if (engine.DEBUG) {
-    level_idx = 1;
+    level_idx = 0;
     engine.setState(playInit);
   } else {
     engine.setState(titleInit);
