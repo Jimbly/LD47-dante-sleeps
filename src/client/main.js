@@ -6,8 +6,10 @@ const camera2d = require('./glov/camera2d.js');
 const engine = require('./glov/engine.js');
 const glov_font = require('./glov/font.js');
 const input = require('./glov/input.js');
-const { cos, floor, max, min, sin, tan, PI } = Math;
+const { cos, floor, max, min, sin, tan, PI, sqrt } = Math;
 const net = require('./glov/net.js');
+const particles = require('./glov/particles.js');
+const particle_data = require('./particle_data.js');
 const pico8 = require('./glov/pico8.js');
 const { randCreate } = require('./glov/rand_alea.js');
 const glov_sprites = require('./glov/sprites.js');
@@ -19,7 +21,10 @@ const { clamp } = require('../common/util.js');
 const {
   vec2,
   v2add,
+  v2addScale,
+  v2copy,
   v2distSq,
+  v2normalize,
   v2scale,
   v2sub,
   vec4,
@@ -28,11 +33,12 @@ const {
 window.Z = window.Z || {};
 Z.BACKGROUND = 1;
 Z.AIR = 10;
+Z.PARTICLES = 19;
 Z.PLAYER = 20;
 Z.ROCKS = 30;
 Z.RINGS = 32;
 Z.PLAYER_WIN = 40;
-Z.PARTICLES = 20;
+Z.PARTICLE_CRASH = 50;
 Z.UI_play = 200;
 
 // let app = exports;
@@ -99,6 +105,7 @@ export function main() {
   //const PAD = input.PAD;
 
   function initGraphics() {
+    particles.preloadParticleData(particle_data);
     sprites.rock = createSprite({
       name: 'rock',
       size: vec2(16, 16),
@@ -175,6 +182,7 @@ export function main() {
       win_counter: 0,
       bg_data: [],
     };
+    state.last_part_pos = state.player.pos.slice(0);
     let num_rocks = floor(state.level_w / rdense);
     for (let ii = 0; ii < num_rocks; ++ii) {
       let x = (ii + rand.random()) * rdense;
@@ -213,19 +221,24 @@ export function main() {
     }
     let num_air = air_dense ? floor(level_w / air_dense) : 0;
     for (let ii = 0; ii < num_air; ++ii) {
-      state.stuff.push({
+      let tall = rand.random() > 0.5;
+      let thing = {
         sprite: sprites.air,
         type: 'air',
         pos: vec2((ii + rand.random()) * air_dense, rand.floatBetween(16, game_height - 16)),
-        size: vec2(32, rand.floatBetween(32, 64)),
+        size: vec2(32, tall ? 64 : 32),
         angle: 0,
         rspeed: 0,
         color: pico8.colors[12],
         rsquared: 12*12,
         freq: 0,
         amp: 32,
-        z: Z.AIR,
-      });
+        z: Z.AIR - 1,
+      };
+      state.stuff.push(thing);
+      engine.glov_particles.createSystem(particle_data.defs[tall ? 'air_tall' : 'air'],
+        [thing.pos[0], thing.pos[1], Z.AIR]
+      );
     }
     for (let ii = 0; ii < state.stuff.length; ++ii) {
       state.stuff[ii].pos0 = state.stuff[ii].pos.slice(0);
@@ -296,36 +309,16 @@ export function main() {
 
   const speed_scale = 0.75;
   const dTheta = 0.002 * speed_scale;
-  const accel = 0.0025;
+  const accel = 0.0025 * 0.75;
   const air_drag = 0.5;
   const min_radius = 0.5 * base_radius;
   let delta = vec2();
-  function play(dt) {
-    sprites.game_bg.draw({
-      x: 0, y: 0, z: Z.BACKGROUND,
-      color: pico8.colors[2],
-    });
-    camera2d.setAspectFixed(game_width, game_height);
+  let show_preview = false;
 
-    let { player, stuff } = state;
-    if (player.pos[0] > state.level_w) {
-      player.pos[0] -= state.level_w;
-      state.cam_x -= state.level_w;
-    } else if (player.pos[0] < 0) {
-      player.pos[0] += state.level_w;
-      state.cam_x += state.level_w;
-    }
-
-    if (engine.DEBUG && input.keyDownEdge(KEYS.F1)) {
-      state.do_win = !state.do_win;
-    }
-
-    // update stuff
+  function stepPlayer(player, dt) {
     let hit_air = false;
-    for (let ii = 0; ii < stuff.length; ++ii) {
-      let r = stuff[ii];
-      r.angle += r.rspeed * dt * 0.0002;
-      r.pos[1] = r.pos0[1] + r.amp * sin(r.freq * engine.frame_timestamp);
+    for (let ii = 0; ii < state.stuff.length; ++ii) {
+      let r = state.stuff[ii];
       if (r.type === 'air') {
         r.hit = player.pos[0] > r.pos[0] - r.size[0]/2 && player.pos[0] < r.pos[0] + r.size[0]/2 &&
           player.pos[1] > r.pos[1] - r.size[1]/2 && player.pos[1] < r.pos[1] + r.size[1]/2 &&
@@ -336,9 +329,125 @@ export function main() {
       }
     }
 
+    let radius = player.radius * base_radius;
+    let { angle } = player;
+    // Test angle against the top of the screen (y = 0)
+    let test_angle = angle;
+    let rbias = 0;
+    if (test_angle > PI) {
+      // coming down from the top, scale back the max radius limit
+      test_angle = PI * 2 - test_angle;
+      if (test_angle < PI / 2) {
+        rbias = test_angle * base_radius * 2;
+      } else {
+        rbias = (PI - test_angle) * base_radius * 2;
+      }
+    }
+    let dist_to_top = player.pos[1];
+    let inter_angle = (PI - test_angle) / 2;
+    let hoffs = tan(inter_angle) * dist_to_top;
+    let max_r = hoffs / sin(PI - test_angle) - 0.5 + rbias;
+    //let maxs_center = vec2(player.pos[0] + max_r * cos(angle + PI/2), player.pos[1] + max_r * sin(angle + PI/2));
+    //ui.drawHollowCircle(maxs_center[0], maxs_center[1], Z.PLAYER - 1, max_r, 0.99, [1,1,1, 0.5]);
+
+    // Test angle against the bottom of the screen (y = 0)
+    test_angle = angle - PI;
+    if (test_angle < 0) {
+      test_angle += PI * 2;
+    }
+    rbias = 0;
+    if (test_angle > PI) {
+      test_angle = PI * 2 - test_angle;
+      if (test_angle < PI / 2) {
+        rbias = test_angle * base_radius * 2;
+      } else {
+        rbias = (PI - test_angle) * base_radius * 2;
+      }
+    }
+    let dist_to_bottom = game_height - player.pos[1];
+    inter_angle = (PI - test_angle) / 2;
+    hoffs = tan(inter_angle) * dist_to_bottom;
+    let max_r2 = hoffs / sin(PI - test_angle) - 0.5 + rbias;
+    // let maxs_center = vec2(player.pos[0] + max_r2 * cos(angle + PI/2), player.pos[1] + max_r2 * sin(angle + PI/2));
+    // ui.drawHollowCircle(maxs_center[0], maxs_center[1], Z.PLAYER - 1, max_r2, 0.99, [1,1,1, 0.5]);
+
+    // ui.print(null, 50, 50, Z.PLAYER + 10, `angle: ${(angle * 180 / PI).toFixed(0)}`);
+    if (isFinite(max_r2)) {
+      if (isFinite(max_r)) {
+        max_r = min(max_r, max_r2);
+      } else {
+        max_r = max_r2;
+      }
+    }
+    if (isFinite(max_r)) {
+      // let maxs_center = vec2(player.pos[0] + max_r * cos(angle + PI/2), player.pos[1] + max_r * sin(angle + PI/2));
+      // ui.drawHollowCircle(maxs_center[0], maxs_center[1], Z.PLAYER - 1, max_r, 0.99, [1,0,0, 0.5]);
+      // Instead of an absolute max, we want to reduce the radius only if
+      //  the *minimum* radius is not going to fit?
+      if (max_r > min_radius) {
+        max_r = (max_r - min_radius) * 4 + min_radius;
+      }
+      // maxs_center = vec2(player.pos[0] + max_r * cos(angle + PI/2), player.pos[1] + max_r * sin(angle + PI/2));
+      // ui.drawHollowCircle(maxs_center[0], maxs_center[1], Z.PLAYER - 1, max_r, 0.99, [0,1,0, 0.5]);
+      radius = min(radius, max_r);
+    }
+    // let dir = vec2(cos(angle), sin(angle));
+    let new_angle = angle - dt * dTheta;
+    if (new_angle < 0) {
+      new_angle += PI * 2;
+    }
+    let center = vec2(player.pos[0] + radius * cos(angle + PI/2), player.pos[1] + radius * sin(angle + PI/2));
+    let new_pos = vec2(center[0] - radius * cos(new_angle + PI/2), center[1] - radius * sin(new_angle + PI/2));
+    if (hit_air) {
+      // This is effectively no different than scaling the radius!
+      v2sub(delta, new_pos, player.pos);
+      v2scale(delta, delta, air_drag);
+      v2add(new_pos, player.pos, delta);
+    }
+    player.angle = new_angle;
+    new_pos[1] = clamp(new_pos[1], 0, game_height);
+    player.pos[0] = new_pos[0];
+    player.pos[1] = new_pos[1];
+  }
+
+  function shift(shift_dist) {
+    state.player.pos[0] += shift_dist;
+    state.cam_x += shift_dist;
+    state.last_part_pos[0] += shift_dist;
+    engine.glov_particles.shift([shift_dist, 0, 0]);
+  }
+
+  function play(dt) {
+    sprites.game_bg.draw({
+      x: 0, y: 0, z: Z.BACKGROUND,
+      color: pico8.colors[2],
+    });
+
+    let { player, stuff } = state;
+    if (player.pos[0] > state.level_w) {
+      shift(-state.level_w);
+    } else if (player.pos[0] < 0) {
+      shift(state.level_w);
+    }
+
+    if (engine.DEBUG && input.keyDownEdge(KEYS.F1)) {
+      state.do_win = !state.do_win;
+    }
+
+    if (input.keyDownEdge(KEYS.F2)) {
+      show_preview = !show_preview;
+    }
+
+    // update stuff
+    for (let ii = 0; ii < stuff.length; ++ii) {
+      let r = stuff[ii];
+      r.angle += r.rspeed * dt * 0.0002;
+      r.pos[1] = r.pos0[1] + r.amp * sin(r.freq * engine.frame_timestamp);
+    }
+
     // update player
-    let new_pos;
     let player_scale = 1;
+
     if (state.do_win) {
       state.win_counter += dt;
       // Even out angle
@@ -355,7 +464,7 @@ export function main() {
         }
       }
       let dist = -dt * speed_scale * 0.2;
-      new_pos = vec2(player.pos[0] + cos(player.angle) * dist, player.pos[1] + sin(player.angle) * dist);
+      let new_pos = vec2(player.pos[0] + cos(player.angle) * dist, player.pos[1] + sin(player.angle) * dist);
       if (player.angle === PI) {
         let dh = dt * 0.05;
         // if (new_pos[1] < game_height/2) {
@@ -366,6 +475,8 @@ export function main() {
         new_pos[1] -= dh;
       }
       player_scale = min(1 + state.win_counter * 0.0005, 2);
+      player.pos[0] = new_pos[0];
+      player.pos[1] = new_pos[1];
     } else {
       let { radius } = player;
       if (input.keyDown(KEYS.D)) {
@@ -377,95 +488,44 @@ export function main() {
       } else if (radius < 1) {
         player.radius = min(1, radius + dt * accel * 2);
       }
-      radius = player.radius * base_radius;
-      let { angle } = player;
-      // Test angle against the top of the screen (y = 0)
-      let test_angle = angle;
-      let rbias = 0;
-      if (test_angle > PI) {
-        // coming down from the top, scale back the max radius limit
-        test_angle = PI * 2 - test_angle;
-        if (test_angle < PI / 2) {
-          rbias = test_angle * base_radius * 2;
-        } else {
-          rbias = (PI - test_angle) * base_radius * 2;
+      let step_dt = dt;
+      while (step_dt > 0) {
+        stepPlayer(player, min(step_dt, 16));
+        step_dt -= 16;
+        let dist = v2distSq(state.last_part_pos, player.pos);
+        let emit_step = 4;
+        let emit_min_dist = 8;
+        if (dist > emit_min_dist*emit_min_dist) {
+          let part = player.radius > 1.95 ? 'smoke1' : player.radius < 0.55 ? 'smoke2' : 'smoke';
+          dist = sqrt(dist);
+          v2sub(delta, player.pos, state.last_part_pos);
+          v2normalize(delta, delta);
+          let tan_x = cos(player.angle - PI/2) * 3;
+          let tan_y = sin(player.angle - PI/2) * 3;
+          while (dist > emit_min_dist) {
+            v2addScale(state.last_part_pos, state.last_part_pos, delta, emit_step);
+            dist -= emit_step;
+            engine.glov_particles.createSystem(particle_data.defs[part],
+              [state.last_part_pos[0] + tan_x, state.last_part_pos[1] + tan_y, Z.PARTICLES]
+            );
+          }
         }
       }
-      let dist_to_top = player.pos[1];
-      let inter_angle = (PI - test_angle) / 2;
-      let hoffs = tan(inter_angle) * dist_to_top;
-      let max_r = hoffs / sin(PI - test_angle) - 0.5 + rbias;
-      //let maxs_center = vec2(player.pos[0] + max_r * cos(angle + PI/2), player.pos[1] + max_r * sin(angle + PI/2));
-      //ui.drawHollowCircle(maxs_center[0], maxs_center[1], Z.PLAYER - 1, max_r, 0.99, [1,1,1, 0.5]);
-
-      // Test angle against the bottom of the screen (y = 0)
-      test_angle = angle - PI;
-      if (test_angle < 0) {
-        test_angle += PI * 2;
-      }
-      rbias = 0;
-      if (test_angle > PI) {
-        test_angle = PI * 2 - test_angle;
-        if (test_angle < PI / 2) {
-          rbias = test_angle * base_radius * 2;
-        } else {
-          rbias = (PI - test_angle) * base_radius * 2;
-        }
-      }
-      let dist_to_bottom = game_height - player.pos[1];
-      inter_angle = (PI - test_angle) / 2;
-      hoffs = tan(inter_angle) * dist_to_bottom;
-      let max_r2 = hoffs / sin(PI - test_angle) - 0.5 + rbias;
-      // let maxs_center = vec2(player.pos[0] + max_r2 * cos(angle + PI/2), player.pos[1] + max_r2 * sin(angle + PI/2));
-      // ui.drawHollowCircle(maxs_center[0], maxs_center[1], Z.PLAYER - 1, max_r2, 0.99, [1,1,1, 0.5]);
-
-      // ui.print(null, 50, 50, Z.PLAYER + 10, `angle: ${(angle * 180 / PI).toFixed(0)}`);
-      if (isFinite(max_r2)) {
-        if (isFinite(max_r)) {
-          max_r = min(max_r, max_r2);
-        } else {
-          max_r = max_r2;
-        }
-      }
-      if (isFinite(max_r)) {
-        // let maxs_center = vec2(player.pos[0] + max_r * cos(angle + PI/2), player.pos[1] + max_r * sin(angle + PI/2));
-        // ui.drawHollowCircle(maxs_center[0], maxs_center[1], Z.PLAYER - 1, max_r, 0.99, [1,0,0, 0.5]);
-        // Instead of an absolute max, we want to reduce the radius only if
-        //  the *minimum* radius is not going to fit?
-        if (max_r > min_radius) {
-          max_r = (max_r - min_radius) * 4 + min_radius;
-        }
-        // maxs_center = vec2(player.pos[0] + max_r * cos(angle + PI/2), player.pos[1] + max_r * sin(angle + PI/2));
-        // ui.drawHollowCircle(maxs_center[0], maxs_center[1], Z.PLAYER - 1, max_r, 0.99, [0,1,0, 0.5]);
-        radius = min(radius, max_r);
-      }
-      // let dir = vec2(cos(angle), sin(angle));
-      let new_angle = angle - dt * dTheta;
-      if (new_angle < 0) {
-        new_angle += PI * 2;
-      }
-      let center = vec2(player.pos[0] + radius * cos(angle + PI/2), player.pos[1] + radius * sin(angle + PI/2));
-      new_pos = vec2(center[0] - radius * cos(new_angle + PI/2), center[1] - radius * sin(new_angle + PI/2));
-      if (hit_air) {
-        // This is effectively no different than scaling the radius!
-        v2sub(delta, new_pos, player.pos);
-        v2scale(delta, delta, air_drag);
-        v2add(new_pos, player.pos, delta);
-      }
-      player.angle = new_angle;
     }
-    if (!state.do_win) {
-      new_pos[1] = clamp(new_pos[1], 0, game_height);
-    }
-    player.pos[0] = new_pos[0];
-    player.pos[1] = new_pos[1];
     let new_cam_x = min(max(state.cam_x, floor(player.pos[0]) - game_width * 2 / 3),
       floor(player.pos[0]) - game_width / 3);
     state.bg_x += new_cam_x - state.cam_x;
     state.cam_x = new_cam_x;
 
     let cam_x = floor(state.cam_x);
+    camera2d.setAspectFixed(game_width, game_height);
     camera2d.set(camera2d.x0() + cam_x, camera2d.y0(), camera2d.x1() + cam_x, camera2d.y1());
+
+    if (engine.DEBUG && input.keyDownEdge(KEYS.F3)) {
+      engine.glov_particles.createSystem(particle_data.defs.pickup,
+        [player.pos[0], player.pos[1], Z.PARTICLE_CRASH]
+      );
+    }
 
     sprites.player.draw({
       x: floor(player.pos[0]),
@@ -476,6 +536,25 @@ export function main() {
       w: player_scale,
       h: player_scale,
     });
+
+    // draw flight preview
+    if (show_preview) {
+      let test_player = {
+        pos: player.pos.slice(0),
+        angle: player.angle,
+        radius: player.radius,
+      };
+      let last_pos = player.pos.slice(0);
+      let len = 48;
+      for (let ii = 0; len >= 0; ++ii) {
+        stepPlayer(test_player, 16);
+        ui.drawLine(last_pos[0], last_pos[1], test_player.pos[0], test_player.pos[1], Z.PLAYER - 1, 2, 0.9,
+          [1,1,1,0.5 * len/32]);
+        len -= sqrt(v2distSq(last_pos, test_player.pos));
+        v2copy(last_pos, test_player.pos);
+      }
+    }
+
     let fade = state.do_win ? max(0, 1 - state.win_counter / 3000) : 1;
     let view_x0 = cam_x - 64;
     let view_x1 = cam_x + game_width + 64;
@@ -506,8 +585,14 @@ export function main() {
               state.hit_rocks++;
               state.player.radius = 0.5;
               state.player.angle += rand.floatBetween(0.5, 0.75);
+              engine.glov_particles.createSystem(particle_data.defs.crash,
+                [r.pos[0], r.pos[1], Z.PARTICLE_CRASH]
+              );
             } else if (r.type === 'ring') {
               state.hit_rings++;
+              engine.glov_particles.createSystem(particle_data.defs.pickup,
+                [r.pos[0], r.pos[1], Z.PARTICLE_CRASH]
+              );
               if (state.hit_rings === state.num_rings) {
                 state.do_win = true;
                 state.win_counter = 0;
@@ -544,7 +629,7 @@ export function main() {
       } else if (x < view_x0) {
         x += state.level_w;
       }
-      if (x >= view_x0 && x <= view_x1) {
+      if (x >= view_x0 && x <= view_x1 && r.type !== 'air') {
         let alpha_save = r.color[3];
         r.color[3] *= fade;
         r.sprite.draw({
@@ -620,6 +705,10 @@ export function main() {
       !state.hit_rocks ? hits_style_green : state.hit_rocks < 3 ? hits_style_yellow : hits_style_red,
       game_width - score_size, game_height - 4, Z.UI, ui.font_height,
       font.ALIGN.HCENTER|font.ALIGN.VBOTTOM, score_size, 0, `${state.hit_rocks} hits`);
+
+    // Reset camera for particles
+    camera2d.setAspectFixed(game_width, game_height);
+    camera2d.set(camera2d.x0() + cam_x, camera2d.y0(), camera2d.x1() + cam_x, camera2d.y1());
   }
 
   function playInit(dt) {
