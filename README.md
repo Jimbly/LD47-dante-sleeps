@@ -1,9 +1,8 @@
-LD47 -
+Dante Sleeps - LD47 - Stuck in a loop
 ============================
 
 cat on title screen
 ambient wind sounds or music
-other things to avoid: other debris? aliens?
 touch up plane
 ? subtle indicator of current arc and thrust amount?
   put it in, but even more subtle?
