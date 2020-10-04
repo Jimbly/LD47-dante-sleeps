@@ -20,7 +20,7 @@ const glov_sprites = require('./glov/sprites.js');
 // const transition = require('./glov/transition.js');
 const ui = require('./glov/ui.js');
 const { clamp, nop } = require('../common/util.js');
-// const { soundLoad, soundPlay, soundPlayMusic, FADE_IN, FADE_OUT } = require('./glov/sound.js');
+const { soundPlay } = require('./glov/sound.js');
 const {
   vec2,
   v2add,
@@ -87,6 +87,17 @@ export function main() {
       title_font,
       viewport_postprocess: false,
       show_fps: engine.DEBUG,
+      ui_sounds: {
+        'crash': ['crash1', 'crash2', 'crash3', 'crash4', 'crash5'],
+        'pickup': ['pickup1', 'pickup2', 'pickup3', 'pickup4'],
+        'win': 'win',
+        'thurst1': 'thrust1',
+        'thurst2': 'thrust2',
+        'thurst3': 'thrust3',
+      },
+      sound: {
+        ext_list: ['wav'],
+      },
     })) {
       return true;
     }
@@ -97,6 +108,8 @@ export function main() {
   }
 
   let { font, title_font } = ui;
+
+  let thrust_sound;
 
   // const font = engine.font;
 
@@ -204,6 +217,14 @@ export function main() {
   }
   initGraphics();
 
+  function killFX() {
+    if (thrust_sound) {
+      thrust_sound.fadeOut(100);
+      thrust_sound = null;
+    }
+    engine.glov_particles.killAll();
+  }
+
   const base_radius = 50;
   let state;
   let rand;
@@ -221,7 +242,7 @@ export function main() {
       ring_amp,
       air_dense,
     } = level;
-    engine.glov_particles.killAll();
+    killFX();
     rand = randCreate(seed);
     let level_w = ring_dense * (num_rings + 1);
     state = {
@@ -247,12 +268,12 @@ export function main() {
     let num_rocks = floor(state.level_w / rdense);
     for (let ii = 0; ii < num_rocks; ++ii) {
       let x = (ii + rand.random()) * rdense;
-      let y = rand.floatBetween(16, game_height - 16*2);
+      let y = rand.floatBetween(16, game_height - 16);
       if (x < safe_zone) {
         if (safe_clear) {
           continue;
         }
-        y = y < game_height / 2 ? y * 0.1 : game_height - (game_height - y) * 0.1;
+        y = clamp(y < game_height / 2 ? y * 0.1 : game_height - (game_height - y) * 0.1, 16, game_height - 16);
       }
       state.stuff.push({
         sprite: sprites.rock,
@@ -273,7 +294,7 @@ export function main() {
       state.stuff.push({
         sprite: sprites.ring,
         type: 'ring',
-        pos: vec2((ii + 1 + rand.random()) * ring_dense, rand.floatBetween(32, game_height - 32*2)),
+        pos: vec2((ii + 1 + rand.random()) * ring_dense, rand.floatBetween(32, game_height - 32)),
         angle: 0,
         rspeed: 0,
         frame: rand.floatBetween(0, 10),
@@ -483,11 +504,37 @@ export function main() {
   }
 
   function triggerWin() {
-    state.do_win = !state.do_win;
+    state.do_win = true;
     state.win_counter = 0;
     score_system.setScore(cur_level_idx,
       { hits: state.hit_rocks, time: round(state.time / 10) }
     );
+    setTimeout(() => {
+      ui.playUISound('win');
+    }, 1000);
+  }
+
+  function setThrustSound(sound_key) {
+    if (ui.isMenuUp()) {
+      if (thrust_sound) {
+        thrust_sound.fadeOut(250);
+        thrust_sound = null;
+      }
+      return;
+    }
+    if (thrust_sound && thrust_sound.key === sound_key &&
+      engine.frame_timestamp - thrust_sound.start_at < 3500
+    ) {
+      return;
+    }
+    if (thrust_sound) {
+      thrust_sound.fadeOut(250);
+    }
+    thrust_sound = soundPlay(sound_key, 0.125);
+    if (thrust_sound) {
+      thrust_sound.key = sound_key;
+      thrust_sound.start_at = engine.frame_timestamp;
+    }
   }
 
   let temp_color = vec4();
@@ -505,14 +552,19 @@ export function main() {
     }
 
     if (engine.DEBUG && input.keyDownEdge(KEYS.F1)) {
-      triggerWin();
+      if (state.do_win) {
+        state.do_win = false;
+      } else {
+        ui.playUISound('pickup');
+        triggerWin();
+      }
     }
 
     if (input.keyDownEdge(KEYS.F2)) {
       show_preview = !show_preview;
     }
 
-    if (input.keyDownEdge(KEYS.ESC)) {
+    if (input.keyDownEdge(KEYS.ESC) && !state.do_win) {
       ui.modalDialog({
         text: 'Really quit?',
         buttons: {
@@ -591,6 +643,10 @@ export function main() {
         // eslint-disable-next-line no-use-before-define
         engine.setState(levelSelectInit);
       }
+      if (thrust_sound) {
+        thrust_sound.fadeOut(100);
+        thrust_sound = null;
+      }
     } else {
       let { radius } = player;
       if (input.keyDown(KEYS.D) || input.mouseDown({
@@ -619,6 +675,8 @@ export function main() {
         emitSmoke();
       }
       state.time += dt;
+
+      setThrustSound(player.radius < 0.55 ? 'thrust3' : player.radius > 1.95 ? 'thrust2' : 'thrust1');
     }
     let new_cam_x = min(max(state.cam_x, floor(player.pos[0]) - game_width * 2 / 3),
       floor(player.pos[0]) - game_width / 3);
@@ -633,6 +691,7 @@ export function main() {
       engine.glov_particles.createSystem(particle_data.defs.pickup,
         [player.pos[0], player.pos[1], Z.PARTICLE_CRASH]
       );
+      ui.playUISound('pickup');
     }
 
     sprites.player.draw({
@@ -697,12 +756,14 @@ export function main() {
               engine.glov_particles.createSystem(particle_data.defs.crash,
                 [r.pos[0], r.pos[1], Z.PARTICLE_CRASH]
               );
+              ui.playUISound('crash', 0.5);
             } else if (r.type === 'ring') {
               r.hit_fade = ring_fade_time;
               state.hit_rings++;
               engine.glov_particles.createSystem(particle_data.defs.pickup,
                 [r.pos[0], r.pos[1], Z.PARTICLE_CRASH]
               );
+              ui.playUISound('pickup');
               if (state.hit_rings === state.num_rings) {
                 triggerWin();
               }
@@ -754,9 +815,9 @@ export function main() {
       }
     }
 
-    ui.print(glov_font.styleAlpha(null, fade), 50 + (cam_x > game_width/2 ? state.level_w : 0),
+    ui.print(glov_font.styleAlpha(null, fade), 50 + (cam_x > game_width ? state.level_w : 0),
       game_height - 32 - ui.font_height - 1, Z.PLAYER - 1, 'Controls: A and D');
-    ui.print(glov_font.styleAlpha(null, fade), 50 + (cam_x > game_width/2 ? state.level_w : 0),
+    ui.print(glov_font.styleAlpha(null, fade), 50 + (cam_x > game_width ? state.level_w : 0),
       game_height - 32, Z.PLAYER - 1, '  or Touch left/right half of display');
 
     camera2d.setAspectFixed(game_width, game_height);
@@ -1039,7 +1100,7 @@ export function main() {
   }
 
   function levelSelectInit(dt) {
-    engine.glov_particles.killAll();
+    killFX();
     engine.setState(levelSelect);
     score_system.updateHighScores();
     ui.focusSteal('play_button');
@@ -1090,7 +1151,7 @@ export function main() {
 
   let first_time = true;
   function titleInit(dt) {
-    engine.glov_particles.killAll();
+    killFX();
     title_state = {
       fade1: 0,
       fade2: 0,

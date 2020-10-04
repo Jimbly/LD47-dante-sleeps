@@ -5,14 +5,20 @@ avoid: other debris? aliens?
 ? subtle indicator of current arc and thrust amount?
 background: fade colors, add stars (just crossfade?)
 sound effects
-  thrust: low/med/high
-  pick up ring
-  crash
-  win
+  X thrust: low/med/high
+  X pick up ring
+  X crash
+  win - needs longer fanfare
+new button graphic
 ambient wind sounds or music
-multiple levels
+final level set
 more detail on backgrounds
 
+finalizing:
+  wav -> mp3 conversion (and update ext_list)
+
+Early Ideas
+===========
 Biplane Loop
 Art:
   Plane
