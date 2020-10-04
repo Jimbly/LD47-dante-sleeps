@@ -1,6 +1,17 @@
 Dante Sleeps - LD47 - Stuck in a loop
 ============================
 
+Ludum Dare 47 Entry by Jimbly - "Dante Slumbers"
+
+> Your cat fell asleep on the yoke, and you do not wish to wake him, so you're going to get through this using just the throttle.
+
+* Using [Javascript libGlov/GLOV.js framework](https://github.com/Jimbly/glovjs)
+
+Start with: `npm start` (after running `npm i` once)
+
+Remaining TODO:
+* Nothing! How is that possible?
+
 Early Ideas
 ===========
 Biplane Loop

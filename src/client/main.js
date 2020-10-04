@@ -45,6 +45,8 @@ Z.PLAYER_WIN = 40;
 Z.PARTICLE_CRASH = 50;
 Z.UI_play = 200;
 
+const SCREENSHOT = false;
+
 // let app = exports;
 // Virtual viewport for our game logic
 const game_width = 320;
@@ -90,7 +92,7 @@ export function main() {
       font,
       title_font,
       viewport_postprocess: false,
-      show_fps: engine.DEBUG,
+      show_fps: engine.DEBUG && !SCREENSHOT,
       ui_sounds: {
         'crash': ['crash1', 'crash2', 'crash3', 'crash4', 'crash5'],
         'pickup': ['pickup1', 'pickup2', 'pickup3', 'pickup4'],
@@ -194,18 +196,6 @@ export function main() {
   let bg_set4 = ['hill_big1g', 'hill_big2g']; // farBgStars
   let bg_set5 = ['hill_big1', 'clouds', 'hill_big2', 'hill2b', 'hill']; // farBgCycle.bind(null, color_cycle_daynight)
   let levels = [
-    // {
-    //   name: 'test',
-    //   seed: 4,
-    //   rdense: 16,
-    //   safe_zone: 320,
-    //   num_rings: 10,
-    //   ring_dense: 160,
-    //   air_dense: 230,
-    //   ring_amp: 32,
-    //   far_bg: farBgCycle.bind(null, color_cycle_daynight),
-    //   bg_set: bg_set5,
-    // },
     { // first
       name: 'intro',
       display_name: 'Intro',
@@ -300,6 +290,20 @@ export function main() {
       bg_set: bg_set1,
     },
   ];
+  if (engine.DEBUG) {
+    levels.splice(0, 0, {
+      name: 'test',
+      seed: 4,
+      rdense: 0,
+      safe_zone: 320,
+      num_rings: 1,
+      ring_dense: 1000,
+      air_dense: 0,
+      ring_amp: 32,
+      far_bg: nop,
+      bg_set: [],
+    });
+  }
 
   function encodeScore(score) {
     assert(score.time && score.hits >= 0/* && score.rings*/); // some old scores had no rings
@@ -990,6 +994,9 @@ export function main() {
 
     let cam_x = floor(state.cam_x);
     camera2d.setAspectFixed(game_width, game_height);
+    if (SCREENSHOT) {
+      camera2d.zoom(160, 120, 2);
+    }
     camera2d.set(camera2d.x0() + cam_x, camera2d.y0(), camera2d.x1() + cam_x, camera2d.y1());
 
     if (engine.DEBUG && input.keyDownEdge(KEYS.F3)) {
@@ -1184,36 +1191,42 @@ export function main() {
     // HUD
     // ui.print(null, 5, 5, Z.UI, `player_x:${player.pos[0]}`);
 
-    let score_size = 100;
-    title_font.drawSizedAligned(hud_style, game_width - score_size, game_height - 20, Z.UI, 26,
-      font.ALIGN.HCENTER|font.ALIGN.VBOTTOM, score_size, 0, `${state.hit_rings}/${state.num_rings}`);
-    let time_since_hit = engine.frame_timestamp - state.last_hit_time;
-    font.drawSizedAligned(
-      !state.hit_rocks ? hits_style_green : glov_font.styleColored(hits_style_yellow,
-        glov_font.intColorFromVec4Color(
-          v4lerp(temp_color, min(time_since_hit/1000, 1), pico8.colors[8], pico8.colors[10]))
-      ),
-      game_width - score_size, game_height - 12, Z.UI, ui.font_height,
-      font.ALIGN.HCENTER|font.ALIGN.VBOTTOM, score_size, 0, `${state.hit_rocks} hits`);
-    let ts = floor((state.time % 1000) / 100);
-    let ss = floor(state.time / 1000) % 60;
-    let ms = floor(state.time / (60*1000));
-    font.drawSizedAligned(time_style,
-      game_width - score_size, game_height - 2, Z.UI, ui.font_height,
-      font.ALIGN.HCENTER|font.ALIGN.VBOTTOM, score_size, 0, `${ms}:${pad2(ss)}.${ts}`);
+    if (!SCREENSHOT) {
+      let score_size = 100;
+      title_font.drawSizedAligned(hud_style, game_width - score_size, game_height - 20, Z.UI, 26,
+        font.ALIGN.HCENTER|font.ALIGN.VBOTTOM, score_size, 0, `${state.hit_rings}/${state.num_rings}`);
+      let time_since_hit = engine.frame_timestamp - state.last_hit_time;
+      font.drawSizedAligned(
+        !state.hit_rocks ? hits_style_green : glov_font.styleColored(hits_style_yellow,
+          glov_font.intColorFromVec4Color(
+            v4lerp(temp_color, min(time_since_hit/1000, 1), pico8.colors[8], pico8.colors[10]))
+        ),
+        game_width - score_size, game_height - 12, Z.UI, ui.font_height,
+        font.ALIGN.HCENTER|font.ALIGN.VBOTTOM, score_size, 0, `${state.hit_rocks} hits`);
+      let ts = floor((state.time % 1000) / 100);
+      let ss = floor(state.time / 1000) % 60;
+      let ms = floor(state.time / (60*1000));
+      font.drawSizedAligned(time_style,
+        game_width - score_size, game_height - 2, Z.UI, ui.font_height,
+        font.ALIGN.HCENTER|font.ALIGN.VBOTTOM, score_size, 0, `${ms}:${pad2(ss)}.${ts}`);
 
-    if (input.touch_mode) {
-      ui.drawLine(0, 239.5, 320, 239.5, Z.UI, 1, 1, pico8.colors[0]);
-      ui.drawLine(159.5, 237.5, 159.5, 239.5, Z.UI + 2, 1, 1, pico8.colors[6]);
-      if (player.radius > 1) {
-        ui.drawLine(159.5, 239.5, 160 + (player.radius - 1) * 160, 239.5, Z.UI + 1, 1, 1, pico8.colors[3]);
-      } else if (player.radius < 1) {
-        ui.drawLine(159.5 - 159.5 * (1-2*(player.radius - 0.5)), 239.5, 159.5, 239.5, Z.UI + 1, 1, 1, pico8.colors[4]);
+      if (input.touch_mode) {
+        ui.drawLine(0, 239.5, 320, 239.5, Z.UI, 1, 1, pico8.colors[0]);
+        ui.drawLine(159.5, 237.5, 159.5, 239.5, Z.UI + 2, 1, 1, pico8.colors[6]);
+        if (player.radius > 1) {
+          ui.drawLine(159.5, 239.5, 160 + (player.radius - 1) * 160, 239.5, Z.UI + 1, 1, 1, pico8.colors[3]);
+        } else if (player.radius < 1) {
+          ui.drawLine(159.5 - 159.5 * (1-2*(player.radius - 0.5)), 239.5, 159.5, 239.5, Z.UI + 1, 1, 1,
+            pico8.colors[4]);
+        }
       }
     }
 
     // Reset camera for particles
     camera2d.setAspectFixed(game_width, game_height);
+    if (SCREENSHOT) {
+      camera2d.zoom(160, 120, 2);
+    }
     camera2d.set(camera2d.x0() + cam_x, camera2d.y0(), camera2d.x1() + cam_x, camera2d.y1());
   }
 
@@ -1500,7 +1513,9 @@ export function main() {
     }
     y += ui.button_height + 16;
 
-    farBgStars();
+    if (!SCREENSHOT) {
+      farBgStars();
+    }
   }
 
   let first_time = true;
@@ -1523,7 +1538,7 @@ export function main() {
     t = title_seq.add(t, 300, (v) => (title_state.fade3 = v));
     t = title_seq.add(t, 500, nop);
     title_seq.add(t, 300, (v) => (title_state.fade4 = v));
-    if (!first_time) {
+    if (!first_time || SCREENSHOT) {
       title_seq.update(30000);
     }
     first_time = false;
@@ -1533,8 +1548,8 @@ export function main() {
   }
 
   if (engine.DEBUG) {
-    level_idx = 2;
-    engine.setState(playInit);
+    level_idx = 1;
+    engine.setState(titleInit);
   } else {
     engine.setState(titleInit);
   }
