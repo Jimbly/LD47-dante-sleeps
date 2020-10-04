@@ -393,12 +393,14 @@ export function main() {
   }
   initGraphics();
 
+  let air_systems = [];
   function killFX() {
     if (thrust_sound) {
       thrust_sound.fadeOut(100);
       thrust_sound = null;
     }
     engine.glov_particles.killAll();
+    air_systems = [];
   }
 
   const base_radius = 50;
@@ -504,18 +506,18 @@ export function main() {
         z: Z.AIR - 1,
       };
       state.stuff.push(thing);
-      engine.glov_particles.createSystem(particle_data.defs[tall ? 'air_tall' : 'air'],
+      air_systems.push(engine.glov_particles.createSystem(particle_data.defs[tall ? 'air_tall' : 'air'],
         [thing.pos[0], thing.pos[1], Z.AIR]
-      );
+      ));
       if (thing.pos[0] > level_w - game_width - 100) {
-        engine.glov_particles.createSystem(particle_data.defs[tall ? 'air_tall' : 'air'],
+        air_systems.push(engine.glov_particles.createSystem(particle_data.defs[tall ? 'air_tall' : 'air'],
           [thing.pos[0] - level_w, thing.pos[1], Z.AIR]
-        );
+        ));
       }
       if (thing.pos[0] < game_width + 100) {
-        engine.glov_particles.createSystem(particle_data.defs[tall ? 'air_tall' : 'air'],
+        air_systems.push(engine.glov_particles.createSystem(particle_data.defs[tall ? 'air_tall' : 'air'],
           [thing.pos[0] + level_w, thing.pos[1], Z.AIR]
-        );
+        ));
       }
 
     }
@@ -792,6 +794,9 @@ export function main() {
   function triggerWin() {
     state.do_win = true;
     state.win_counter = 0;
+    for (let ii = 0; ii < air_systems.length; ++ii) {
+      air_systems[ii].kill_soft = true;
+    }
     setTimeout(() => {
       ui.playUISound('win');
     }, 1000);
@@ -1528,7 +1533,7 @@ export function main() {
   }
 
   if (engine.DEBUG) {
-    level_idx = 1;
+    level_idx = 2;
     engine.setState(playInit);
   } else {
     engine.setState(titleInit);

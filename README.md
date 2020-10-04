@@ -1,8 +1,6 @@
 Dante Sleeps - LD47 - Stuck in a loop
 ============================
 
-fix air drafts not disappearing during win anim
-
 Early Ideas
 ===========
 Biplane Loop

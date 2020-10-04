@@ -375,7 +375,7 @@ class ParticleSystem {
       }
       emitter.countdown = instValue(def.emit_rate);
     }
-    if (emitter.started && !emitter.stopped) {
+    if (emitter.started && !emitter.stopped && !this.kill_soft) {
       // should we stop?
       let remaining_dt = dt;
       let emit_dt = dt;
