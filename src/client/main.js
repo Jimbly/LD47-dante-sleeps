@@ -479,9 +479,19 @@ export function main() {
       player.pos[1] = new_pos[1];
     } else {
       let { radius } = player;
-      if (input.keyDown(KEYS.D)) {
+      if (input.keyDown(KEYS.D) || input.mouseDown({
+        y: -20000,
+        h: 40000,
+        x: camera2d.wReal() / 2,
+        w: Infinity,
+      })) {
         player.radius = min(2, radius + dt * accel);
-      } else if (input.keyDown(KEYS.A)) {
+      } else if (input.keyDown(KEYS.A) || input.mouseDown({
+        y: -20000,
+        h: 40000,
+        x: -20000,
+        w: 20000 + camera2d.wReal() / 2,
+      })) {
         player.radius = max(0.5, radius - dt * accel);
       } else if (radius > 1) {
         player.radius = max(1, radius - dt * accel * 2);
@@ -645,8 +655,10 @@ export function main() {
       }
     }
 
-    ui.print(glov_font.styleAlpha(null, fade), 50 + (cam_x > game_width/2 ? state.level_w : 0), game_height - 32,
-      Z.PLAYER - 1, 'Controls: A and D');
+    ui.print(glov_font.styleAlpha(null, fade), 50 + (cam_x > game_width/2 ? state.level_w : 0),
+      game_height - 32 - ui.font_height - 1, Z.PLAYER - 1, 'Controls: A and D');
+    ui.print(glov_font.styleAlpha(null, fade), 50 + (cam_x > game_width/2 ? state.level_w : 0),
+      game_height - 32, Z.PLAYER - 1, '  or Touch left/right half of display');
 
     camera2d.setAspectFixed(game_width, game_height);
     // Background
