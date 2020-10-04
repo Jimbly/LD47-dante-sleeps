@@ -17,7 +17,7 @@ const { randCreate } = require('./glov/rand_alea.js');
 const score_system = require('./glov/score.js');
 const glov_sprites = require('./glov/sprites.js');
 // const sprite_animation = require('./glov/sprite_animation.js');
-// const transition = require('./glov/transition.js');
+const transition = require('./glov/transition.js');
 const ui = require('./glov/ui.js');
 const { clamp, nop } = require('../common/util.js');
 const { soundPlay } = require('./glov/sound.js');
@@ -569,8 +569,13 @@ export function main() {
       ui.modalDialog({
         text: 'Really quit?',
         buttons: {
-          // eslint-disable-next-line no-use-before-define
-          Yes: () => engine.setState(levelSelectInit),
+          Yes: () => {
+            transition.queue(Z.TRANSITION_FINAL, transition.splitScreen(500, 4, true));
+            setTimeout(() => {
+              // eslint-disable-next-line no-use-before-define
+              engine.setState(levelSelectInit);
+            }, 1);
+          },
           No: null,
         },
       });
@@ -641,6 +646,7 @@ export function main() {
       player.pos[1] = new_pos[1];
       emitSmoke();
       if (player.pos[1] < -100) {
+        transition.queue(Z.TRANSITION_FINAL, transition.pixelate(500));
         // eslint-disable-next-line no-use-before-define
         engine.setState(levelSelectInit);
       }
@@ -928,7 +934,7 @@ export function main() {
   }
 
   let scores_edit_box;
-  function showHighScores(y) {
+  function showHighScores(y, eff_level_idx) {
     let width = game_width * 0.75;
     let x = (game_width - width) / 2;
     // let y0 = y;
@@ -937,7 +943,7 @@ export function main() {
     let pad = size;
     font.drawSizedAligned(null, x, y, z, size * 2, glov_font.ALIGN.HCENTERFIT, width, 0, 'HIGH SCORES');
     y += size * 2 + 2;
-    let level_id = levels[level_idx].name;
+    let level_id = levels[eff_level_idx].name;
     let scores = score_system.high_scores[level_id];
     let score_style = glov_font.styleColored(null, pico8.font_colors[7]);
     if (!scores) {
@@ -984,7 +990,7 @@ export function main() {
       }
       if (ii < 15 || drawme) {
         drawSet([
-          `#${ii+1}`, score_system.formatName(s), `${s.score.rings}/${levels[level_idx].num_rings}`,
+          `#${ii+1}`, score_system.formatName(s), `${s.score.rings}/${levels[eff_level_idx].num_rings}`,
           s.score.hits, formatTime(s.score.time)
         ], style);
       }
@@ -1052,6 +1058,10 @@ export function main() {
       0, y, Z.UI, header_h, font.ALIGN.HCENTER, 320, 0,
       `Level: ${levels[level_idx].name}`);
 
+    let eff_level_idx = level_idx;
+    let completed = hasCompleted(level_idx);
+    let has_next = completed && level_idx !== levels.length - 1;
+
     if (ui.buttonText({
       x: 8,
       y,
@@ -1060,6 +1070,7 @@ export function main() {
       text: '<<',
       disabled: !level_idx,
     }) || level_idx && input.keyDownEdge(KEYS.A)) {
+      transition.queue(Z.TRANSITION_FINAL, transition.splitScreen(500, 4, true));
       --level_idx;
     }
     if (ui.buttonText({
@@ -1070,13 +1081,12 @@ export function main() {
       text: '>>',
       disabled: level_idx === levels.length - 1,
     }) || level_idx !== levels.length - 1 && input.keyDownEdge(KEYS.D)) {
+      transition.queue(Z.TRANSITION_FINAL, transition.splitScreen(500, 4, true));
       ++level_idx;
     }
 
     y += header_h + 4;
 
-    let completed = hasCompleted(level_idx);
-    let has_next = completed && level_idx !== levels.length - 1;
     let button_w = ui.button_width * 1.5;
     if (ui.buttonText({
       key: has_next ? 'replay' : 'play_button',
@@ -1087,6 +1097,7 @@ export function main() {
       font_height: ui.font_height * 2,
       text: completed ? 'Retry' : 'Play',
     })) {
+      transition.queue(Z.TRANSITION_FINAL, transition.pixelate(500));
       engine.setState(playInit);
     }
 
@@ -1103,14 +1114,17 @@ export function main() {
       })) {
         ++level_idx;
         if (!hasCompleted(level_idx)) {
+          transition.queue(Z.TRANSITION_FINAL, transition.pixelate(500));
           engine.setState(playInit);
+        } else {
+          transition.queue(Z.TRANSITION_FINAL, transition.splitScreen(500, 4, true));
         }
       }
     }
 
     y += ui.button_height * 2 + 4;
 
-    showHighScores(y);
+    showHighScores(y, eff_level_idx);
   }
 
   function levelSelectInit(dt) {
@@ -1156,6 +1170,7 @@ export function main() {
         y,
         text: 'Play'
       })) {
+        transition.queue(Z.TRANSITION_FINAL, transition.splitScreen(500, 4, false));
         engine.setState(levelSelectInit);
       }
     }
@@ -1190,8 +1205,8 @@ export function main() {
   }
 
   if (engine.DEBUG) {
-    level_idx = 1;
-    engine.setState(playInit);
+    //level_idx = 1;
+    engine.setState(levelSelectInit);
   } else {
     engine.setState(titleInit);
   }
