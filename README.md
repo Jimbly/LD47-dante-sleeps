@@ -1,12 +1,17 @@
 LD47 -
 ============================
 
-avoid: other debris? aliens?
-? subtle indicator of current arc and thrust amount?
 background: fade colors, add stars, clouds (just crossfade?)
-ambient wind sounds or music
-final level set
+make bgs grayscale and tint in code
+different color tint sets for each level
 more detail on backgrounds
+ambient wind sounds or music
+try horizontally moving rings and rocks (variable speed)
+final level set
+cat on title screen
+other things to avoid: other debris? aliens?
+thicker rings?
+? subtle indicator of current arc and thrust amount?
 
 finalizing:
   wav -> mp3 conversion (and update ext_list)

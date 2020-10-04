@@ -19,7 +19,7 @@ const glov_sprites = require('./glov/sprites.js');
 // const sprite_animation = require('./glov/sprite_animation.js');
 const transition = require('./glov/transition.js');
 const ui = require('./glov/ui.js');
-const { clamp, nop } = require('../common/util.js');
+const { clamp, lerp, nop } = require('../common/util.js');
 const { soundPlay } = require('./glov/sound.js');
 const {
   vec2,
@@ -123,6 +123,67 @@ export function main() {
   const KEYS = input.KEYS;
   //const PAD = input.PAD;
 
+  let uvs = vec4(0,0,1,1);
+  let temp_color = vec4();
+  function farBgStars() {
+    uvs[0] = sprites.far_bg_stars.uvs[0];
+    uvs[2] = sprites.far_bg_stars.uvs[2];
+    //uvs[1] = 0 + round(engine.frame_timestamp * 0.001) / 512;
+    uvs[1] = 0 + engine.frame_timestamp * 0.000002;
+    uvs[3] = uvs[1] + 240.5/512;
+    sprites.far_bg_stars.draw({
+      x: 0, y: 0, z: Z.BACKGROUND,
+      w: render_width, h: render_height,
+      uvs,
+      nozoom: true,
+    });
+    uvs[0] = 0;
+    uvs[2] = 320/128;
+    uvs[1] = 0 + round(engine.frame_timestamp * 0.01) / 128;
+    uvs[3] = uvs[1] + 240/128;
+    sprites.far_bg_noise.draw({
+      x: 0, y: 0, z: Z.BACKGROUND + 0.1,
+      w: render_width, h: render_height,
+      uvs,
+    });
+  }
+  function colorScale(src, scale) {
+    return vec4(src[0] * scale, src[1] * scale, src[2] * scale, src[3]);
+  }
+  let color_cycle_daynight = [
+    colorScale(pico8.colors[1], 0.5),
+    colorScale(pico8.colors[1], 0.5),
+    pico8.colors[2],
+    pico8.colors[4],
+    pico8.colors[9],
+    pico8.colors[12],
+    pico8.colors[12],
+    pico8.colors[14],
+  ];
+  color_cycle_daynight.push(color_cycle_daynight[0]);
+  let color_cycle_alien = [
+    colorScale(pico8.colors[2], 0.5),
+    colorScale(pico8.colors[2], 0.5),
+    pico8.colors[4],
+    pico8.colors[13],
+    pico8.colors[3],
+  ];
+  color_cycle_alien.push(color_cycle_alien[0]);
+  function farBgCycle(color_cycle) {
+    let t = engine.frame_timestamp * 0.0001 % (color_cycle.length - 1);
+    let t0 = floor(t);
+    v4lerp(temp_color, t - t0, color_cycle[t0], color_cycle[t0+1]);
+    temp_color[3] = 0.5;
+    sprites.game_bg.draw({
+      x: 0, y: 0, z: Z.BACKGROUND,
+      color: temp_color,
+    });
+  }
+  let bg_set1 = ['hill_big1', 'clouds', 'hill_big2', 'plant', 'hill']; // farBgCycle.bind(null, color_cycle_daynight)
+  let bg_set2 = ['hill_big1gr', 'clouds', 'hill2b', 'hill1p']; // farBgCycle.bind(null, color_cycle_alien)
+  let bg_set3 = ['hill_big1', 'clouds', 'hill_big2']; // farBgStars
+  let bg_set4 = ['hill_big1g', 'hill_big2g']; // farBgStars
+  let bg_set5 = ['hill_big1', 'clouds', 'hill_big2', 'hill2b', 'hill']; // farBgCycle.bind(null, color_cycle_daynight)
   let levels = [
     {
       name: '1',
@@ -134,6 +195,8 @@ export function main() {
       ring_dense: 200,
       air_dense: 0,
       ring_amp: 0,
+      far_bg: farBgStars,
+      bg_set: bg_set1,
     },
     {
       name: 'test',
@@ -144,6 +207,8 @@ export function main() {
       ring_dense: 160,
       air_dense: 230,
       ring_amp: 32,
+      far_bg: farBgCycle.bind(null, color_cycle_daynight),
+      bg_set: bg_set5,
     },
   ];
 
@@ -218,6 +283,19 @@ export function main() {
       createSprite({ name: 'bg/hill_2' }),
       createSprite({ name: 'bg/hill_3' }),
     ];
+    let clouds = createSprite({ name: 'bg/clouds', ws: [128, 128], hs: [128, 128, 128, 128] });
+    sprites.bg.clouds = [
+      { sprite: clouds, frame: 0 },
+      { sprite: clouds, frame: 1 },
+      { sprite: clouds, frame: 2 },
+      { sprite: clouds, frame: 3 },
+      { sprite: clouds, frame: 4 },
+      { sprite: clouds, frame: 5 },
+      { sprite: clouds, frame: 6 },
+      { sprite: clouds, frame: 7 },
+    ];
+    sprites.far_bg_stars = createSprite({ name: 'bg/far1', filter_min: gl.LINEAR, filter_mag: gl.LINEAR });
+    sprites.far_bg_noise = createSprite({ name: 'bg/noise_mask' });
   }
   initGraphics();
 
@@ -320,7 +398,7 @@ export function main() {
         size: vec2(32, tall ? 64 : 32),
         angle: 0,
         rspeed: 0,
-        color: pico8.colors[12],
+        color: pico8.colors[12].slice(0),
         rsquared: 12*12,
         freq: 0,
         freq_offs: rand.random() * PI * 2,
@@ -337,47 +415,119 @@ export function main() {
     }
   }
 
-  let bg_layers = [{
-    xscale: 0.05,
-    dx: 120,
-    dx_range: 40,
-    w: 320,
-    h: 128,
-    ymin: game_height - 128 - 50,
-    ymax: game_height - 128*0.5 - 50,
-    sprite_list: sprites.bg.hill_big,
-    crange: [0.4, 0.6],
-  }, {
-    xscale: 0.1,
-    dx: 80,
-    dx_range: 40,
-    w: 320,
-    h: 128,
-    ymin: game_height - 128,
-    ymax: game_height - 128*0.5,
-    sprite_list: sprites.bg.hill_big,
-    crange: [0.6, 1.0],
-  }, {
-    xscale: 0.2,
-    dx: 100,
-    dx_range: 50,
-    w: 64,
-    h: 128,
-    ymin: game_height - 160,
-    ymax: game_height - 64,
-    sprite_list: sprites.bg.plant,
-    crange: [0.8, 1.0],
-  }, {
-    xscale: 0.3,
-    dx: 60,
-    dx_range: 10,
-    w: 128,
-    h: 128,
-    ymin: game_height - 64,
-    ymax: game_height - 16,
-    sprite_list: sprites.bg.hill,
-    crange: [0.7, 1],
-  }];
+  let bg_layers = {
+    hill_big1: {
+      xscale: 0.05,
+      dx: 120,
+      dx_range: 40,
+      w: 320,
+      h: 128,
+      ymin: game_height - 128 - 50,
+      ymax: game_height - 128*0.5 - 50,
+      sprite_list: sprites.bg.hill_big,
+      crange: [colorScale(pico8.colors[1], 0.4), colorScale(pico8.colors[1], 0.6)],
+    },
+    hill_big1g: {
+      xscale: 0.05,
+      dx: 120,
+      dx_range: 40,
+      w: 320,
+      h: 128,
+      ymin: game_height - 128 - 50,
+      ymax: game_height - 128*0.5 - 50,
+      sprite_list: sprites.bg.hill_big,
+      crange: [colorScale(pico8.colors[3], 0.4), colorScale(pico8.colors[3], 0.6)],
+    },
+    hill_big1gr: {
+      xscale: 0.05,
+      dx: 120,
+      dx_range: 40,
+      w: 320,
+      h: 128,
+      ymin: game_height - 128 - 50,
+      ymax: game_height - 128*0.5 - 50,
+      sprite_list: sprites.bg.hill_big,
+      crange: [colorScale(pico8.colors[5], 0.3), colorScale(pico8.colors[5], 1)],
+    },
+    clouds: {
+      xscale: 0.15,
+      dx: 40,
+      dx_range: 160,
+      dx_speed: 0.003,
+      w: 64,
+      h: 48,
+      ymin: -32,
+      ymax: 64,
+      sprite_list: sprites.bg.clouds,
+      crange: [vec4(1,1,1,0.1), vec4(1,1,1,0.2)],
+    },
+    hill_big2: {
+      xscale: 0.1,
+      dx: 80,
+      dx_range: 40,
+      w: 320,
+      h: 128,
+      ymin: game_height - 128,
+      ymax: game_height - 128*0.5,
+      sprite_list: sprites.bg.hill_big,
+      crange: [colorScale(pico8.colors[1], 0.6), colorScale(pico8.colors[1], 1)],
+    },
+    hill_big2g: {
+      xscale: 0.1,
+      dx: 80,
+      dx_range: 40,
+      w: 320,
+      h: 128,
+      ymin: game_height - 128,
+      ymax: game_height - 128*0.5,
+      sprite_list: sprites.bg.hill_big,
+      crange: [colorScale(pico8.colors[3], 0.6), colorScale(pico8.colors[3], 1)],
+    },
+    plant: {
+      xscale: 0.2,
+      dx: 100,
+      dx_range: 50,
+      w: 64,
+      h: 128,
+      ymin: game_height - 120,
+      ymax: game_height - 64,
+      sprite_list: sprites.bg.plant,
+      crange: [colorScale(pico8.colors[5], 0.8), colorScale(pico8.colors[5], 1)],
+    },
+    hill: {
+      xscale: 0.3,
+      dx: 60,
+      dx_range: 10,
+      w: 128,
+      h: 128,
+      ymin: game_height - 64,
+      ymax: game_height - 16,
+      sprite_list: sprites.bg.hill,
+      crange: [colorScale(pico8.colors[3], 0.7), colorScale(pico8.colors[3], 1)],
+    },
+    hill2b: {
+      xscale: 0.2,
+      dx: 60,
+      dx_range: 10,
+      w: 128,
+      h: 128,
+      ymin: game_height - 64 - 48,
+      ymax: game_height - 16 - 48,
+      sprite_list: sprites.bg.hill,
+      crange: [colorScale(pico8.colors[5], 1), colorScale(pico8.colors[4], 1)],
+    },
+    hill1p: {
+      xscale: 0.3,
+      dx: 60,
+      dx_range: 10,
+      w: 128,
+      h: 128,
+      ymin: game_height - 64,
+      ymax: game_height - 16,
+      sprite_list: sprites.bg.hill,
+      crange: [v4lerp(vec4(), 0.5, pico8.colors[2], pico8.colors[4]), pico8.colors[2]],
+    },
+  };
 
   let hud_style = glov_font.style(null, {
     outline_width: 3,
@@ -538,12 +688,9 @@ export function main() {
     }
   }
 
-  let temp_color = vec4();
   function play(dt) {
-    sprites.game_bg.draw({
-      x: 0, y: 0, z: Z.BACKGROUND,
-      color: pico8.colors[2],
-    });
+    let cur_level = levels[cur_level_idx];
+    cur_level.far_bg();
 
     let { player, stuff } = state;
     if (player.pos[0] > state.level_w) {
@@ -842,8 +989,8 @@ export function main() {
         bg_data[layer] = [];
       }
       let layer_data = bg_data[layer];
-      let layer_x = floor(bg_x * opts.xscale);
-      let x0 = floor((layer_x - opts.w) / opts.dx);
+      let layer_x = floor(bg_x * opts.xscale + (opts.dx_speed || 0) * engine.frame_timestamp);
+      let x0 = floor((layer_x - opts.w - opts.dx_range) / opts.dx);
       let x1 = floor((layer_x + game_width) / opts.dx) + 1;
       for (let x = x0; x <= x1; ++x) {
         let hb = layer_data[x];
@@ -856,27 +1003,29 @@ export function main() {
             y,
             z: z + yrange,
           };
-          if (opts.crange) {
-            let v = (opts.crange[1] - opts.crange[0]) * yrange + opts.crange[0];
-            hb.color = vec4(v,v,v,1);
-          } else {
-            hb.color = vec4(1,1,1,1);
-          }
+          hb.color = v4lerp(vec4(), yrange, opts.crange[0], opts.crange[1]);
         }
-        opts.sprite_list[hb.idx].draw({
+        let sprite = opts.sprite_list[hb.idx];
+        let frame;
+        if (sprite.sprite) {
+          frame = sprite.frame;
+          sprite = sprite.sprite;
+        }
+        sprite.draw({
           x: floor(x * opts.dx + hb.xoffs - layer_x),
           y: hb.y,
           w: opts.w,
           h: opts.h,
           z: hb.z,
           color: hb.color,
+          frame,
         });
       }
       layer++;
       z++;
     }
-    for (let ii = 0; ii < bg_layers.length; ++ii) {
-      doBGLayer(bg_layers[ii]);
+    for (let ii = 0; ii < cur_level.bg_set.length; ++ii) {
+      doBGLayer(bg_layers[cur_level.bg_set[ii]]);
     }
 
     // HUD
@@ -1125,6 +1274,8 @@ export function main() {
     y += ui.button_height * 2 + 4;
 
     showHighScores(y, eff_level_idx);
+
+    farBgStars(0.5);
   }
 
   function levelSelectInit(dt) {
@@ -1176,6 +1327,7 @@ export function main() {
     }
     y += ui.button_height + 16;
 
+    farBgStars();
   }
 
   let first_time = true;
@@ -1195,7 +1347,7 @@ export function main() {
     t = title_seq.add(t, 300, (v) => (title_state.fade3 = v));
     t = title_seq.add(t, 1500, nop);
     title_seq.add(t, 300, (v) => (title_state.fade4 = v));
-    if (engine.DEBUG || !first_time) {
+    if (!first_time) {
       title_seq.update(30000);
     }
     first_time = false;
@@ -1205,8 +1357,8 @@ export function main() {
   }
 
   if (engine.DEBUG) {
-    //level_idx = 1;
-    engine.setState(levelSelectInit);
+    level_idx = 1;
+    engine.setState(playInit);
   } else {
     engine.setState(titleInit);
   }
