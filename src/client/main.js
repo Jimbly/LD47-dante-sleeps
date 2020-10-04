@@ -185,6 +185,45 @@ export function main() {
   let bg_set4 = ['hill_big1g', 'hill_big2g']; // farBgStars
   let bg_set5 = ['hill_big1', 'clouds', 'hill_big2', 'hill2b', 'hill']; // farBgCycle.bind(null, color_cycle_daynight)
   let levels = [
+    // {
+    //   name: 'test',
+    //   seed: 4,
+    //   rdense: 16,
+    //   safe_zone: 320,
+    //   num_rings: 10,
+    //   ring_dense: 160,
+    //   air_dense: 230,
+    //   ring_amp: 32,
+    //   far_bg: farBgCycle.bind(null, color_cycle_daynight),
+    //   bg_set: bg_set5,
+    // },
+    { // first
+      name: 'intro',
+      display_name: 'Intro',
+      seed: 3,
+      rdense: 100,
+      safe_zone: 320,
+      safe_clear: true,
+      num_rings: 4,
+      ring_dense: 200,
+      air_dense: 0,
+      ring_amp: 0,
+      far_bg: farBgStars,
+      bg_set: bg_set1,
+    },
+    { // 12 hits, 1:07
+      name: 'moving_rings',
+      display_name: 'Movin\' Rings',
+      seed: 6,
+      rdense: 16,
+      safe_zone: 320,
+      num_rings: 6,
+      ring_dense: 160,
+      air_dense: 0,
+      ring_amp: 32,
+      far_bg: farBgCycle.bind(null, color_cycle_alien),
+      bg_set: bg_set2,
+    },
     { // 2 hits, 0:48
       name: 'add_air',
       display_name: 'Air Drafts',
@@ -198,16 +237,29 @@ export function main() {
       far_bg: farBgCycle.bind(null, color_cycle_daynight),
       bg_set: bg_set5,
     },
-    { // 12 hits, 1:07
-      name: 'moving_rings',
-      display_name: 'Movin\' Rings',
-      seed: 6,
-      rdense: 16,
+    { // 20 hits, 1:39
+      name: 'medium',
+      display_name: 'Medium',
+      seed: 14,
+      rdense: 21,
       safe_zone: 320,
-      num_rings: 6,
+      num_rings: 10,
       ring_dense: 160,
-      air_dense: 0,
+      air_dense: 230,
       ring_amp: 32,
+      far_bg: farBgStars,
+      bg_set: bg_set3,
+    },
+    { // 22 hits, 1:10
+      name: 'rough_ride',
+      display_name: 'Rough Ride',
+      seed: 13,
+      rdense: 8,
+      safe_zone: 320,
+      num_rings: 1,
+      ring_dense: 1000,
+      air_dense: 400,
+      ring_amp: 100,
       far_bg: farBgCycle.bind(null, color_cycle_alien),
       bg_set: bg_set2,
     },
@@ -225,30 +277,18 @@ export function main() {
       far_bg: farBgStars,
       bg_set: bg_set4,
     },
-    { // first
-      name: 'intro',
-      seed: 3,
-      rdense: 100,
-      safe_zone: 320,
-      safe_clear: true,
-      num_rings: 4,
-      ring_dense: 200,
-      air_dense: 0,
-      ring_amp: 0,
-      far_bg: farBgStars,
-      bg_set: bg_set1,
-    },
-    {
-      name: 'test',
-      seed: 4,
+    { // 16 hits, 2:41
+      name: 'hard',
+      display_name: 'Hard',
+      seed: 16,
       rdense: 16,
       safe_zone: 320,
       num_rings: 10,
       ring_dense: 160,
-      air_dense: 230,
+      air_dense: 200,
       ring_amp: 32,
       far_bg: farBgCycle.bind(null, color_cycle_daynight),
-      bg_set: bg_set5,
+      bg_set: bg_set1,
     },
   ];
 
@@ -413,10 +453,14 @@ export function main() {
       });
     }
     for (let ii = 0; ii < num_rings; ++ii) {
+      let x = (ii + 1 + rand.random()) * ring_dense;
+      if (num_rings === 1) {
+        x = ring_dense + 160;
+      }
       state.stuff.push({
         sprite: sprites.ring,
         type: 'ring',
-        pos: vec2((ii + 1 + rand.random()) * ring_dense, rand.floatBetween(32, game_height - 32)),
+        pos: vec2(x, rand.floatBetween(32, game_height - 32)),
         angle: 0,
         rspeed: 0,
         frame: rand.floatBetween(0, 10),
@@ -1266,7 +1310,7 @@ export function main() {
     let header_h = 26;
     title_font.drawSizedAligned(title_style,
       0, y, Z.UI, header_h, font.ALIGN.HCENTER, 320, 0,
-      levels[level_idx].display_name || levels[level_idx].name);
+      `${level_idx+1}/${levels.length} ${levels[level_idx].display_name || levels[level_idx].name}`);
 
     let eff_level_idx = level_idx;
     let completed = hasCompleted(level_idx);
