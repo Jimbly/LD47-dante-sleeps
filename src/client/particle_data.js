@@ -129,7 +129,7 @@ defs.pickup = {
   particles: {
     part0: {
       blend: 'alpha',
-      texture: 'ring',
+      texture: 'ring_old',
       color: [1,1,1,1], // multiplied by animation track, default 1,1,1,1, can be omitted
       color_track: [
         // just values, NOT random range

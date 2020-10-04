@@ -1,16 +1,12 @@
 LD47 -
 ============================
 
-background: fade colors, add stars, clouds (just crossfade?)
-make bgs grayscale and tint in code
-different color tint sets for each level
-more detail on backgrounds
-ambient wind sounds or music
 try horizontally moving rings and rocks (variable speed)
 final level set
 cat on title screen
+ambient wind sounds or music
 other things to avoid: other debris? aliens?
-thicker rings?
+touch up plane
 ? subtle indicator of current arc and thrust amount?
 
 finalizing:
