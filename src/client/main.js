@@ -2,6 +2,7 @@
 const glov_local_storage = require('./glov/local_storage.js');
 glov_local_storage.storage_prefix = 'ld47'; // Before requiring anything else that might load from this
 
+const animation = require('./glov/animation.js');
 const camera2d = require('./glov/camera2d.js');
 const engine = require('./glov/engine.js');
 const glov_font = require('./glov/font.js');
@@ -16,7 +17,7 @@ const glov_sprites = require('./glov/sprites.js');
 // const sprite_animation = require('./glov/sprite_animation.js');
 // const transition = require('./glov/transition.js');
 const ui = require('./glov/ui.js');
-const { clamp } = require('../common/util.js');
+const { clamp, nop } = require('../common/util.js');
 // const { soundLoad, soundPlay, soundPlayMusic, FADE_IN, FADE_OUT } = require('./glov/sound.js');
 const {
   vec2,
@@ -48,7 +49,8 @@ const game_height = 240;
 const render_width = game_width;
 const render_height = game_height;
 
-const rock_fade_time = 1000;
+const rock_fade_time = 500;
+const ring_fade_time = 1000;
 
 export let sprites = {};
 
@@ -81,6 +83,7 @@ export function main() {
       font,
       title_font,
       viewport_postprocess: false,
+      show_fps: engine.DEBUG,
     })) {
       return true;
     }
@@ -158,6 +161,7 @@ export function main() {
   let state;
   let rand;
   function setupLevel(seed) {
+    engine.glov_particles.killAll();
     rand = randCreate(seed);
     let rdense = 16;
     let safe_zone = 320;
@@ -244,8 +248,6 @@ export function main() {
       state.stuff[ii].pos0 = state.stuff[ii].pos.slice(0);
     }
   }
-  setupLevel(4);
-
 
   let bg_layers = [{
     xscale: 0.05,
@@ -432,10 +434,25 @@ export function main() {
 
     if (engine.DEBUG && input.keyDownEdge(KEYS.F1)) {
       state.do_win = !state.do_win;
+      state.win_counter = 0;
     }
 
     if (input.keyDownEdge(KEYS.F2)) {
       show_preview = !show_preview;
+    }
+
+    if (input.keyDownEdge(KEYS.ESC)) {
+      ui.modalDialog({
+        text: 'Really quit?',
+        buttons: {
+          // eslint-disable-next-line no-use-before-define
+          Yes: () => engine.setState(titleInit),
+          No: null,
+        },
+      });
+    }
+    if (ui.isMenuUp()) {
+      dt = 0;
     }
 
     // update stuff
@@ -447,6 +464,27 @@ export function main() {
 
     // update player
     let player_scale = 1;
+
+    let emit_step = 4;
+    let emit_min_dist = 8;
+    function emitSmoke() {
+      let dist = v2distSq(state.last_part_pos, player.pos);
+      if (dist > emit_min_dist*emit_min_dist) {
+        let part = player.radius > 1.95 ? 'smoke1' : player.radius < 0.55 ? 'smoke2' : 'smoke';
+        dist = sqrt(dist);
+        v2sub(delta, player.pos, state.last_part_pos);
+        v2normalize(delta, delta);
+        let tan_x = cos(player.angle - PI/2) * 3 * player_scale;
+        let tan_y = sin(player.angle - PI/2) * 3 * player_scale;
+        while (dist > emit_min_dist) {
+          v2addScale(state.last_part_pos, state.last_part_pos, delta, emit_step);
+          dist -= emit_step;
+          engine.glov_particles.createSystem(particle_data.defs[part],
+            [state.last_part_pos[0] + tan_x, state.last_part_pos[1] + tan_y, Z.PARTICLES]
+          );
+        }
+      }
+    }
 
     if (state.do_win) {
       state.win_counter += dt;
@@ -477,6 +515,7 @@ export function main() {
       player_scale = min(1 + state.win_counter * 0.0005, 2);
       player.pos[0] = new_pos[0];
       player.pos[1] = new_pos[1];
+      emitSmoke();
     } else {
       let { radius } = player;
       if (input.keyDown(KEYS.D) || input.mouseDown({
@@ -502,24 +541,7 @@ export function main() {
       while (step_dt > 0) {
         stepPlayer(player, min(step_dt, 16));
         step_dt -= 16;
-        let dist = v2distSq(state.last_part_pos, player.pos);
-        let emit_step = 4;
-        let emit_min_dist = 8;
-        if (dist > emit_min_dist*emit_min_dist) {
-          let part = player.radius > 1.95 ? 'smoke1' : player.radius < 0.55 ? 'smoke2' : 'smoke';
-          dist = sqrt(dist);
-          v2sub(delta, player.pos, state.last_part_pos);
-          v2normalize(delta, delta);
-          let tan_x = cos(player.angle - PI/2) * 3;
-          let tan_y = sin(player.angle - PI/2) * 3;
-          while (dist > emit_min_dist) {
-            v2addScale(state.last_part_pos, state.last_part_pos, delta, emit_step);
-            dist -= emit_step;
-            engine.glov_particles.createSystem(particle_data.defs[part],
-              [state.last_part_pos[0] + tan_x, state.last_part_pos[1] + tan_y, Z.PARTICLES]
-            );
-          }
-        }
+        emitSmoke();
       }
     }
     let new_cam_x = min(max(state.cam_x, floor(player.pos[0]) - game_width * 2 / 3),
@@ -590,8 +612,8 @@ export function main() {
         if (hit) {
           if (!r.hit) {
             r.hit = true;
-            r.hit_fade = rock_fade_time;
             if (r.type === 'rock') {
+              r.hit_fade = rock_fade_time;
               state.hit_rocks++;
               state.player.radius = 0.5;
               state.player.angle += rand.floatBetween(0.5, 0.75);
@@ -599,6 +621,7 @@ export function main() {
                 [r.pos[0], r.pos[1], Z.PARTICLE_CRASH]
               );
             } else if (r.type === 'ring') {
+              r.hit_fade = ring_fade_time;
               state.hit_rings++;
               engine.glov_particles.createSystem(particle_data.defs.pickup,
                 [r.pos[0], r.pos[1], Z.PARTICLE_CRASH]
@@ -725,8 +748,98 @@ export function main() {
 
   function playInit(dt) {
     engine.setState(play);
+    setupLevel(4);
     play(dt);
   }
 
-  engine.setState(playInit);
+  let title_style = glov_font.style(null, {
+    color: pico8.font_colors[7],
+    outline_width: 2,
+    outline_color: pico8.font_colors[1],
+    glow_xoffs: 2,
+    glow_yoffs: 2,
+    glow_inner: -2.5,
+    glow_outer: 5,
+    glow_color: pico8.font_colors[2],
+  });
+  let subtitle_style = null;
+  let subtitle_style2 = glov_font.style(subtitle_style, {
+    color: pico8.font_colors[5],
+  });
+  let title_state;
+  let title_seq;
+  function title(dt) {
+    title_seq.update(dt);
+    title_font.drawSizedAligned(glov_font.styleAlpha(title_style, title_state.fade3),
+      0, 0, Z.UI, 32, font.ALIGN.HVCENTER, 320, 120,
+      'Dante Slumbers');
+
+    let y = 82;
+    font.drawSizedAligned(glov_font.styleAlpha(subtitle_style2, title_state.fade4),
+      0, y, Z.UI, ui.font_height, font.ALIGN.HCENTER, 320, 0,
+      'by Jimb Esser in 48 hours for Ludum Dare 47');
+
+    y = 120;
+    font.drawSizedAligned(glov_font.styleAlpha(subtitle_style, title_state.fade1),
+      0, y, Z.UI, ui.font_height, font.ALIGN.HCENTER, 320, 0,
+      'Your cat, "Dante", has fallen asleep on the yoke.');
+    y += ui.font_height + 8;
+    font.drawSizedAligned(glov_font.styleAlpha(subtitle_style, title_state.fade2),
+      0, y, Z.UI, ui.font_height, font.ALIGN.HCENTER, 320, 0,
+      'You do not wish to wake him, so you are going');
+    y += ui.font_height + 2;
+    font.drawSizedAligned(glov_font.styleAlpha(subtitle_style, title_state.fade2),
+      0, y, Z.UI, ui.font_height, font.ALIGN.HCENTER, 320, 0,
+      'to get through this with just the throttle.');
+    y += ui.font_height + 2;
+
+    y += 16;
+
+    if (title_state.fade3) {
+      if (ui.buttonText({
+        x: 320/2 - ui.button_width - 4,
+        y,
+        text: 'Play'
+      })) {
+        engine.setState(playInit);
+      }
+      if (ui.buttonText({
+        x: 320/2 + 4,
+        y,
+        text: 'High Scores'
+      })) {
+        // TODO
+      }
+    }
+    y += ui.button_height + 16;
+
+  }
+
+  let first_time = true;
+  function titleInit(dt) {
+    engine.glov_particles.killAll();
+    title_state = {
+      fade1: 0,
+      fade2: 0,
+      fade3: 0,
+      fade4: 0,
+    };
+    title_seq = animation.create();
+    let t = title_seq.add(0, 300, (v) => (title_state.fade1 = v));
+    t = title_seq.add(t, 800, nop);
+    t = title_seq.add(t, 300, (v) => (title_state.fade2 = v));
+    t = title_seq.add(t, 1500, nop);
+    t = title_seq.add(t, 300, (v) => (title_state.fade3 = v));
+    t = title_seq.add(t, 1500, nop);
+    title_seq.add(t, 300, (v) => (title_state.fade4 = v));
+    if (engine.DEBUG || !first_time) {
+      title_seq.update(30000);
+    }
+    first_time = false;
+
+    engine.setState(title);
+    title(dt);
+  }
+
+  engine.setState(titleInit);
 }

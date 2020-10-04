@@ -762,7 +762,7 @@ function modalDialogRun() {
   const x0 = camera2d.x0() + round((game_width - eff_modal_width) / 2);
   let x = x0 + pad;
   const y0 = fullscreen_mode ? 0 : (modal_dialog.y0 || modal_y0);
-  let y = y0 + pad;
+  let y = round(y0 + pad);
 
   if (glov_input.pointerLocked()) {
     glov_input.pointerLockExit();
@@ -778,7 +778,7 @@ function modalDialogRun() {
         x, y, Z.MODAL, text_w, 0, eff_font_height * modal_title_scale,
         modal_dialog.title);
     }
-    y += round(vpad * 1.5);
+    y = round(y + vpad * 1.5);
   }
 
   if (modal_dialog.text) {
@@ -790,7 +790,7 @@ function modalDialogRun() {
       y += font.drawSizedWrapped(modal_font_style, x, y, Z.MODAL, text_w, 0, eff_font_height,
         modal_dialog.text);
     }
-    y += vpad;
+    y = round(y + vpad);
   }
 
   let tick_key;
@@ -843,7 +843,7 @@ function modalDialogRun() {
     })) {
       did_button = ii;
     }
-    x += pad + eff_button_width;
+    x = round(x + pad + eff_button_width);
   }
   // Also check low-priority keys
   if (did_button === -1) {
@@ -868,7 +868,7 @@ function modalDialogRun() {
     }
   }
   y += eff_button_height;
-  y += vpad + pad;
+  y = round(y + vpad + pad);
   panel({
     x: x0,
     y: y0,
@@ -1039,6 +1039,10 @@ export function slider(value, param) {
 }
 
 let pp_bad_frames = 0;
+
+export function isMenuUp() {
+  return modal_dialog || menu_up;
+}
 
 export function tickUI(dt) {
   last_frame_button_mouseover = frame_button_mouseover;
@@ -1399,7 +1403,7 @@ export function scaleSizes(scale) {
   button_width = round(200 * scale);
   button_img_size = button_height;
   modal_button_width = round(button_width / 2);
-  modal_width = round(600 * scale);
+  modal_width = round(400 * scale);
   modal_y0 = round(200 * scale);
   modal_title_scale = 1.2;
   modal_pad = round(16 * scale);

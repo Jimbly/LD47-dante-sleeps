@@ -4,6 +4,16 @@ LD47 -
 avoid: other debris? aliens?
 ? subtle indicator of current arc and thrust amount?
 title screen / high scores
+  intro screen with story
+background: fade colors, add stars (just crossfade?)
+sound effects
+  thrust: low/med/high
+  pick up ring
+  crash
+  win
+ambient wind sounds or music
+multiple levels
+more detail on backgrounds
 
 Biplane Loop
 Art:

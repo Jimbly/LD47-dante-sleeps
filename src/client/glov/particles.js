@@ -448,6 +448,10 @@ class ParticleManager {
     }
   }
 
+  killAll() {
+    this.systems = [];
+  }
+
   shift(delta) {
     for (let ii = 0; ii < this.systems.length; ++ii) {
       this.systems[ii].shift(delta);
