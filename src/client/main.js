@@ -96,7 +96,7 @@ export function main() {
         'thurst3': 'thrust3',
       },
       sound: {
-        ext_list: ['wav'],
+        ext_list: ['mp3', 'wav'],
       },
     })) {
       return true;
@@ -148,17 +148,21 @@ export function main() {
   ];
 
   function encodeScore(score) {
-    assert(score.time && score.hits >= 0);
+    assert(score.time && score.hits >= 0 && score.rings);
     let time = min(score.time, 999999);
-    return (999 - score.hits) * 1000000 +
+    return score.rings * 1000000 * 1000 +
+      (999 - score.hits) * 1000000 +
       (999999 - time);
   }
 
   function parseScore(value) {
+    let rings = floor(value / (1000000 * 1000));
+    value -= rings * (1000000 * 1000);
     let hits = floor(value / (1000000));
     value -= hits * 1000000;
     let time = value;
     return {
+      rings,
       hits: 999 - hits,
       time: 999999 - time,
     };
@@ -506,9 +510,6 @@ export function main() {
   function triggerWin() {
     state.do_win = true;
     state.win_counter = 0;
-    score_system.setScore(cur_level_idx,
-      { hits: state.hit_rocks, time: round(state.time / 10) }
-    );
     setTimeout(() => {
       ui.playUISound('win');
     }, 1000);
@@ -764,6 +765,9 @@ export function main() {
                 [r.pos[0], r.pos[1], Z.PARTICLE_CRASH]
               );
               ui.playUISound('pickup');
+              score_system.setScore(cur_level_idx,
+                { rings: state.hit_rings, hits: state.hit_rocks, time: round(state.time / 10) }
+              );
               if (state.hit_rings === state.num_rings) {
                 triggerWin();
               }
@@ -939,7 +943,7 @@ export function main() {
         'Loading...');
       return;
     }
-    let widths = [10, 60, 24, 24];
+    let widths = [10, 60, 24, 24, 24];
     let widths_total = 0;
     for (let ii = 0; ii < widths.length; ++ii) {
       widths_total += widths[ii];
@@ -953,6 +957,7 @@ export function main() {
       glov_font.ALIGN.HFIT,
       glov_font.ALIGN.HFIT | glov_font.ALIGN.HCENTER,
       glov_font.ALIGN.HFIT | glov_font.ALIGN.HCENTER,
+      glov_font.ALIGN.HFIT | glov_font.ALIGN.HCENTER,
     ];
     function drawSet(arr, style, header) {
       let xx = x;
@@ -963,7 +968,7 @@ export function main() {
       }
       y += size;
     }
-    drawSet(['', 'Name', 'Hits', 'Time'], glov_font.styleColored(null, pico8.font_colors[6]), true);
+    drawSet(['', 'Name', 'Rings', 'Hits', 'Time'], glov_font.styleColored(null, pico8.font_colors[6]), true);
     y += 4;
     let found_me = false;
     for (let ii = 0; ii < scores.length; ++ii) {
@@ -976,7 +981,10 @@ export function main() {
         drawme = true;
       }
       if (ii < 15 || drawme) {
-        drawSet([`#${ii+1}`, score_system.formatName(s), s.score.hits, formatTime(s.score.time)], style);
+        drawSet([
+          `#${ii+1}`, score_system.formatName(s), `${s.score.rings}/${levels[level_idx].num_rings}`,
+          s.score.hits, formatTime(s.score.time)
+        ], style);
       }
     }
     y += set_pad;
