@@ -98,6 +98,8 @@ export function main() {
         'thurst1': 'thrust1',
         'thurst2': 'thrust2',
         'thurst3': 'thrust3',
+        'meow': ['meow1', 'meow2', 'meow3', 'meow4'],
+        'purr': 'purr',
       },
       sound: {
         ext_list: ['mp3', 'wav'],
@@ -818,6 +820,14 @@ export function main() {
     }
   }
 
+  function catSound() {
+    if (state.hit_rocks < 3) {
+      ui.playUISound('purr');
+    } else {
+      ui.playUISound('meow');
+    }
+  }
+
   function play(dt) {
     let cur_level = levels[cur_level_idx];
     cur_level.far_bg();
@@ -934,19 +944,24 @@ export function main() {
       }
     } else {
       let { radius } = player;
-      if (input.keyDown(KEYS.D) || input.mouseDown({
-        y: -20000,
-        h: 40000,
-        x: camera2d.wReal() / 2,
-        w: Infinity,
-      })) {
+      if (input.keyDown(KEYS.D) || input.keyDown(KEYS.UP) || input.keyDown(KEYS.RIGHT) || input.keyDown(KEYS.W) ||
+        input.mouseDown({
+          y: -20000,
+          h: 40000,
+          x: camera2d.wReal() / 2,
+          w: Infinity,
+        })
+      ) {
         player.radius = min(2, radius + dt * accel);
-      } else if (input.keyDown(KEYS.A) || input.mouseDown({
-        y: -20000,
-        h: 40000,
-        x: -20000,
-        w: 20000 + camera2d.wReal() / 2,
-      })) {
+      } else if (input.keyDown(KEYS.A) || input.keyDown(KEYS.SPACE) || input.keyDown(KEYS.LEFT) ||
+        input.keyDown(KEYS.DOWN) || input.keyDown(KEYS.S) || input.keyDown(KEYS.SHIFT) ||
+        input.mouseDown({
+          y: -20000,
+          h: 40000,
+          x: -20000,
+          w: 20000 + camera2d.wReal() / 2,
+        })
+      ) {
         player.radius = max(0.5, radius - dt * accel);
       } else if (radius > 1) {
         player.radius = max(1, radius - dt * accel * 2);
@@ -1054,6 +1069,8 @@ export function main() {
               );
               if (state.hit_rings === state.num_rings) {
                 triggerWin();
+              } else if (state.hit_rings === floor(state.num_rings / 2)) {
+                setTimeout(catSound, 1000);
               }
             }
           }
@@ -1179,6 +1196,16 @@ export function main() {
     font.drawSizedAligned(time_style,
       game_width - score_size, game_height - 2, Z.UI, ui.font_height,
       font.ALIGN.HCENTER|font.ALIGN.VBOTTOM, score_size, 0, `${ms}:${pad2(ss)}.${ts}`);
+
+    if (input.touch_mode) {
+      ui.drawLine(0, 239.5, 320, 239.5, Z.UI, 1, 1, pico8.colors[0]);
+      ui.drawLine(159.5, 237.5, 159.5, 239.5, Z.UI + 2, 1, 1, pico8.colors[6]);
+      if (player.radius > 1) {
+        ui.drawLine(159.5, 239.5, 160 + (player.radius - 1) * 160, 239.5, Z.UI + 1, 1, 1, pico8.colors[3]);
+      } else if (player.radius < 1) {
+        ui.drawLine(159.5 - 159.5 * (1-2*(player.radius - 0.5)), 239.5, 159.5, 239.5, Z.UI + 1, 1, 1, pico8.colors[4]);
+      }
+    }
 
     // Reset camera for particles
     camera2d.setAspectFixed(game_width, game_height);
@@ -1458,7 +1485,7 @@ export function main() {
 
     if (title_state.fade3) {
       if (ui.buttonText({
-        x: 320/2 - ui.button_width/2,
+        x: floor(320/2 - ui.button_width/2),
         y,
         text: 'Play'
       })) {
@@ -1501,8 +1528,8 @@ export function main() {
   }
 
   if (engine.DEBUG) {
-    level_idx = 0;
-    engine.setState(titleInit);
+    level_idx = 1;
+    engine.setState(playInit);
   } else {
     engine.setState(titleInit);
   }

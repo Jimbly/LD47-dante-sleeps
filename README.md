@@ -1,13 +1,7 @@
 Dante Sleeps - LD47 - Stuck in a loop
 ============================
 
-ambient wind sounds or music
-  occasional cat meow / purr?
-touch up plane
 fix air drafts not disappearing during win anim
-
-finalizing:
-  wav -> mp3 conversion (and update ext_list)
 
 Early Ideas
 ===========
