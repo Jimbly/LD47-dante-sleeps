@@ -1,8 +1,6 @@
 // Portions Copyright 2019 Jimb Esser (https://github.com/Jimbly/)
 // Released under MIT License: https://opensource.org/licenses/MIT
 
-// TODO: donotcheckin bug: if color track starts with non-0 alpha, it renders in the wrong spot
-
 //////////////////////////////////////////////////////////////////////////
 // Particle System Spec
 
@@ -250,8 +248,10 @@ class ParticleSystem {
       };
       this.emitters.push(emitter);
     }
-    // do initial tick for things that have an emit_time[0] of 0 and have an emit_initial
-    this.tick(0);
+    // Do *not* do this here, causes them to be drawn twice on the first frame,
+    //   they'll be ticked as usual.
+    // // do initial tick for things that have an emit_time[0] of 0 and have an emit_initial
+    // this.tick(0);
   }
 
   tickParticle(part, dt) { // eslint-disable-line class-methods-use-this

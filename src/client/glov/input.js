@@ -259,9 +259,10 @@ function ignored(event) {
   }
 }
 
+let ctrl_checked = false;
 let unload_protected = false;
 function beforeUnload(e) {
-  if (unload_protected) {
+  if (unload_protected && ctrl_checked) {
     // Cancel the event
     e.preventDefault();
     // Chrome requires returnValue to be set
@@ -648,9 +649,7 @@ export function startup(_canvas, params) {
   // For iOS, this is needed in test_fullscreen, but not here, for some reason
   //window.addEventListener('gesturestart', ignored, false);
 
-  if (0) { // donotcheckin
-    window.addEventListener('beforeunload', beforeUnload, false);
-  }
+  window.addEventListener('beforeunload', beforeUnload, false);
 }
 
 
@@ -820,6 +819,7 @@ export function tickInput() {
   mouse_over_captured = false;
   gamepadUpdate();
   in_event.topOfFrame();
+  ctrl_checked = false;
   if (touches[pointerlock_touch_id] && !pointerLocked()) {
     pointerLockExit();
   }
@@ -880,6 +880,7 @@ export function endFrame(skip_mouse) {
 
 export function tickInputInactive() {
   in_event.topOfFrame();
+  ctrl_checked = false;
   endFrame();
 }
 
@@ -1020,6 +1021,9 @@ export function numTouches() {
 }
 
 export function keyDown(keycode) {
+  if (keycode === KEYS.CTRL) {
+    ctrl_checked = true;
+  }
   if (input_eaten_kb) {
     return 0;
   }
