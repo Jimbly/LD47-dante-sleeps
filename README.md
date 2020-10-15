@@ -5,6 +5,8 @@ Ludum Dare 47 Entry by Jimbly - "Dante Slumbers"
 
 > Your cat fell asleep on the yoke, and you do not wish to wake him, so you're going to get through this using just the throttle.
 
+* Play here: [http://www.dashingstrike.com/LudumDare/LD47/](dashingstrike.com/LudumDare/LD47/)
+
 * Using [Javascript libGlov/GLOV.js framework](https://github.com/Jimbly/glovjs)
 
 Start with: `npm start` (after running `npm i` once)
